@@ -988,14 +988,27 @@ fn extract_with(source: &Source, paths: &[String], plan: &Plan, output: &Dir, be
     Ok(())
 }
 
-/// A release shipped as a single exFAT disk image (`.exfat`), which libarchive can't read.
+/// Disk images a release can ship as: exFAT, or a PFS image holding one (`pfs.rs`).
+const IMAGES: [&str; 3] = [".exfat", ".ffpfsc", ".ffpfs"];
+
+/// A release shipped as a single disk image (`.exfat`, or `.ffpfsc`/`.ffpfs` holding an exFAT
+/// image), which libarchive can't read.
 fn exfat_image(source: &Source) -> Result<Option<String>> {
     let images: Vec<&Entry> = source.plan.entries.iter()
-        .filter(|e| !e.directory && e.path.to_ascii_lowercase().ends_with(".exfat")).collect();
+        .filter(|e| !e.directory && IMAGES.iter().any(|ext| e.path.to_ascii_lowercase().ends_with(ext))).collect();
     ensure!(images.len() <= 1, "This download has {} disk images; install supports one game image at a time", images.len());
     let Some(image) = images.first() else { return Ok(None) };
-    ensure!(crate::exfat::is_image(&source.file(&image.path)?), "{} is not an exFAT disk image", image.path);
+    let file = source.file(&image.path)?;
+    ensure!(crate::exfat::is_image(&file) || crate::pfs::is_image(&file), "{} is not an exFAT or PFS disk image", image.path);
     Ok(Some(image.path.clone()))
+}
+
+/// The exFAT volume in a disk image: the file itself, or the image inside a PFS image.
+fn open_volume(file: File) -> Result<crate::exfat::Volume> {
+    if crate::pfs::is_image(&file) {
+        return crate::exfat::Volume::open_image(crate::pfs::exfat_inside(file)?).context("Open the exFAT image inside the PFS image");
+    }
+    crate::exfat::Volume::open(file).context("Open exFAT disk image")
 }
 
 fn inspect_image(volume: &crate::exfat::Volume, cancel: &AtomicBool) -> Result<(Vec<crate::exfat::Node>, Plan)> {
@@ -1098,7 +1111,7 @@ fn install(req: &Request, cancel: &AtomicBool, progress: Progress<'_>, commit: &
     let archive_plan = if let Some(paths) = &paths { Some(inspect_archive(&source, paths, cancel)?) } else { None };
     let image = exfat_image(&source)?;
     ensure!(image.is_none() || paths.is_none(), "This download has both an archive and a disk image; choose a single release folder");
-    let volume = match &image { Some(path) => Some(crate::exfat::Volume::open(source.file(path)?).context("Open exFAT disk image")?), None => None };
+    let volume = match &image { Some(path) => Some(open_volume(source.file(path)?)?), None => None };
     let image_plan = match &volume { Some(v) => Some(inspect_image(v, cancel)?), None => None };
     let plan = archive_plan.as_ref().or(image_plan.as_ref().map(|(_, plan)| plan)).unwrap_or(&source.plan);
     let pkgs: Vec<String> = plan.entries.iter().filter(|e| !e.directory && e.path.to_ascii_lowercase().ends_with(".pkg")).map(|e| e.path.clone()).collect();
@@ -2381,6 +2394,29 @@ mod tests {
         fs::write(req.source.join("game.exfat"), &image).unwrap();
         fs::write(req.source.join("update.exfat"), &image).unwrap();
         assert!(run(&req, &AtomicBool::new(false), &|_,_,_| {}).unwrap_err().to_string().contains("2 disk images"));
+        unpublished(&req);
+    }
+
+    #[test]
+    fn pfs_image_release_installs_the_exfat_game_inside_and_keeps_it() {
+        let exfat = crate::exfat::build::image(&[("PPSA12345-app0/sce_sys/param.json", PARAM), ("PPSA12345-app0/eboot.bin", b"fixture binary bytes"), ("PPSA12345-app0/data", b"data")], true);
+        for (name, compressed) in [("PPSA12345_v1.0.ffpfsc", true), ("PPSA12345.ffpfs", false)] {
+            let (_t, req) = fixture();
+            let pfs = crate::pfs::build::image("PPSA12345.exfat", &exfat, compressed);
+            let path = req.source.join(name);
+            fs::write(&path, &pfs).unwrap();
+            let p = run(&req, &AtomicBool::new(false), &|_,_,_| {}).unwrap();
+            assert_eq!(fs::read(p.join("sce_sys/param.json")).unwrap(), PARAM);
+            assert_eq!(fs::read(p.join("eboot.bin")).unwrap(), b"fixture binary bytes");
+            assert_eq!(fs::read(&path).unwrap(), pfs, "the downloaded image is kept unchanged");
+            clean(&req);
+        }
+        // An encrypted PFS image is refused before anything is written.
+        let (_t, req) = fixture();
+        let mut encrypted = crate::pfs::build::image("PPSA12345.exfat", &exfat, true);
+        encrypted[0x1C] |= 0x4;
+        fs::write(req.source.join("PPSA12345.ffpfsc"), &encrypted).unwrap();
+        assert!(run(&req, &AtomicBool::new(false), &|_,_,_| {}).unwrap_err().to_string().contains("encrypted"));
         unpublished(&req);
     }
 
