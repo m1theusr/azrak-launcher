@@ -429,10 +429,9 @@ impl App {
                     }
                 }
                 h.chips = model(self.chips_for(t));
-                let g = t.game.map(|g| &self.games[g].g);
+                // Home shows the store's blurb and nothing more (a console's home stays quiet); the
+                // release's own technical text (versions, firmware, emulator notes) is in the Game Hub.
                 let desc = info.as_ref().map(|i| i.short.clone()).filter(|s| s.chars().count() > 30 && s.chars().any(|c| c.is_lowercase()))
-                    .or_else(|| g.and_then(|g| g.description.first().cloned()))
-                    .or_else(|| g.map(|g| g.excerpt.clone()))
                     .unwrap_or_else(|| match self.target_platform(t) {
                         crate::platform::Platform::Pc if self.pc_windows(t) => "Installed locally. A Windows game, run with Proton or Wine.".to_string(),
                         crate::platform::Platform::Pc => "Installed locally. Runs on Linux by itself, no emulator needed.".to_string(),

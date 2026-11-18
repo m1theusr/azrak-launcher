@@ -50,10 +50,11 @@ component HeroView inherits Rectangle {
             text: data.desc;
             font-size: (21px * S.k);
             color: Theme.text2;
+            // Two lines at most: the Game Hub has the rest.
             wrap: word-wrap;
             overflow: elide;
             max-width: (780px * S.k);
-            max-height: (96px * S.k);
+            max-height: (54px * S.k);
         }
         Rectangle { height: (34px * S.k); }
         HorizontalLayout {
