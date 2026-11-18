@@ -88,6 +88,34 @@ fn read_sfo(dir: &Path) -> Option<LocalGame> {
     })
 }
 
+/// What starts a PC game installed some other way (a repack's own installer, a Wine-packed
+/// "standalone" game, a GOG game unpacked by hand): its start script, at the top of its folder.
+const STARTERS: [&str; 8] = ["start", "start.sh", "start-game.sh", "start_game.sh", "play.sh", "run.sh", "launch.sh", "game.sh"];
+
+/// A PC game folder the launcher didn't install: one with a start script at its top. It's listed
+/// as it is (named after its folder), with no manifest written into it: Play runs that script.
+fn existing_pc_game(dir: &Path) -> Option<LocalGame> {
+    if dir.join("sce_sys").exists() {
+        return None;
+    }
+    let mut files: Vec<(String, crate::pcgame::Probe)> = STARTERS.iter()
+        .filter(|name| dir.join(name).is_file())
+        .map(|name| (name.to_string(), crate::pcgame::probe_file(&dir.join(name))))
+        .collect();
+    files.retain(|(_, probe)| matches!(probe, crate::pcgame::Probe::Script | crate::pcgame::Probe::Other));
+    let name = dir.file_name()?.to_string_lossy().into_owned();
+    let (launch, kind, alternatives) = crate::pcgame::choose(&files, &name)?;
+    let m = crate::pcgame::Manifest { version: 1, name: name.clone(), topic: 0, launch, kind, alternatives };
+    Some(LocalGame {
+        id: sha1_hex(&dir.to_string_lossy())[..12].to_string(),
+        name,
+        path: dir.to_path_buf(),
+        platform: Platform::Pc,
+        pc: Some(m),
+        ..Default::default()
+    })
+}
+
 /// Scan each folder, its children, and grandchildren (for "Games/<Title>/<PPSAxxxxx-app0>", or a
 /// PC game a folder deeper).
 pub fn scan(dirs: &[PathBuf]) -> Vec<LocalGame> {
@@ -108,7 +136,7 @@ pub fn scan(dirs: &[PathBuf]) -> Vec<LocalGame> {
             if c.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.')) {
                 continue;
             }
-            if let Some(g) = read_param(&c) {
+            if let Some(g) = read_param(&c).or_else(|| existing_pc_game(&c)) {
                 push(g);
                 continue;
             }
@@ -160,5 +188,25 @@ mod tests {
         assert_eq!(found.len(), 1);
         let g = &found[0];
         assert_eq!((g.platform, g.title_id.as_str(), g.name.as_str(), g.version.as_str()), (Platform::Ps4, "CUSA04118", "Firewatch", "01.08"));
+    }
+
+    #[test]
+    fn finds_pc_games_installed_another_way_by_their_start_script() {
+        let t = tempfile::tempdir().unwrap();
+        // A Wine-packed "standalone" game: start (a script), its Wine and prefix beside it.
+        let game = t.path().join("PRAGMATA");
+        std::fs::create_dir_all(game.join("game/wine/bin")).unwrap();
+        std::fs::write(game.join("start"), b"#!/usr/bin/env bash\necho\n").unwrap();
+        std::fs::write(game.join("uninstall.sh"), b"#!/bin/sh\n").unwrap();
+        // A folder with nothing that starts a game, and one with only an .exe: not listed.
+        std::fs::create_dir_all(t.path().join("Saves")).unwrap();
+        std::fs::create_dir_all(t.path().join("Loose")).unwrap();
+        std::fs::write(t.path().join("Loose/game.exe"), b"MZ").unwrap();
+        let found = scan(&[t.path().to_path_buf()]);
+        assert_eq!(found.len(), 1);
+        let m = found[0].pc.as_ref().unwrap();
+        assert_eq!((found[0].name.as_str(), found[0].platform, m.launch.as_str(), m.kind), ("PRAGMATA", Platform::Pc, "start", crate::pcgame::Kind::Script));
+        // Nothing is written into the game's folder.
+        assert!(!game.join(crate::pcgame::MANIFEST).exists());
     }
 }

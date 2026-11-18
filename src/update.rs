@@ -12,7 +12,11 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 
+/// Upstream: where the game catalog is published.
 pub const REPO: &str = "AzrakHQ/azrak-launcher";
+/// Where this build updates itself from: the fork, so an upstream release never replaces it.
+/// `AZRAK_UPDATE_REPO` overrides it.
+const UPDATE_REPO: &str = "m1theusr/azrak-launcher";
 const ASSET: &str = "azrak-linux-x86_64.tar.gz";
 const CHECK_INTERVAL: f64 = 6.0 * 3600.0;
 
@@ -67,7 +71,8 @@ pub fn is_newer(candidate: &str, current: &str) -> bool {
 }
 
 pub fn latest_release() -> Result<Release, String> {
-    let v = http_json(&format!("https://api.github.com/repos/{REPO}/releases/latest"))?;
+    let repo = std::env::var("AZRAK_UPDATE_REPO").unwrap_or_else(|_| UPDATE_REPO.to_string());
+    let v = http_json(&format!("https://api.github.com/repos/{repo}/releases/latest"))?;
     let tag = v["tag_name"].as_str().ok_or("no releases found")?;
     let assets = v["assets"].as_array().cloned().unwrap_or_default();
     let asset = assets.iter().find(|a| a["name"] == ASSET).ok_or("this release has no Linux build yet")?;
