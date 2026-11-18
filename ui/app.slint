@@ -1,4 +1,4 @@
-import { S, Theme, Icons, Zone, DownloadData, DlTab, DlChoice, SetupFile, BootStep, OsiDisk, WjKey, ChipData, ActionData, TileData, HeroData, CardData, CardRow, GenreChip, Fact, FactRow, Shot, HubData, SettingData, SettingSection, MenuItem, RunningData } from "theme.slint";
+import { S, Theme, Icons, Zone, DownloadData, DlTab, DlChoice, SetupFile, BootStep, OsiDisk, WjKey, ChipData, ActionData, TileData, HeroData, CardData, CardRow, GenreChip, Fact, FactRow, Shot, HubData, WidgetData, SettingData, SettingSection, MenuItem, RunningData } from "theme.slint";
 import { FocusRing, Chip, Btn, Kicker, Badge, Switch, KeyCap, KeyboardKey, BackButton, Shimmer, Cover } from "widgets.slint";
 import { DownloadsPage, DownloadConsent, DownloadPanel, Capsule } from "downloads.slint";
 import { LibraryFilter, LibrarySortPicker } from "library.slint";
@@ -22,8 +22,10 @@ component HeroView inherits Rectangle {
     VerticalLayout {
         alignment: end;
         spacing: 0;
-        if data.kicker != "" || data.kicker-accent != "": Kicker { text: data.kicker; accent: data.kicker-accent; live: data.kicker-live; }
-        if data.kicker != "" || data.kicker-accent != "": Rectangle { height: (14px * S.k); }
+        // Like a console's home: the game's art, its logo and the buttons. The blurb, the
+        // facts and the play time are in the Game Hub under it; only a live state shows here.
+        if data.kicker-accent != "": Kicker { text: ""; accent: data.kicker-accent; live: data.kicker-live; }
+        if data.kicker-accent != "": Rectangle { height: (14px * S.k); }
         if data.has-logo: Image {
             source: data.logo;
             width: data.logo-w;
@@ -32,31 +34,15 @@ component HeroView inherits Rectangle {
         }
         if !data.has-logo: Text {
             text: data.title;
-            font-size: (84px * S.k);
+            font-size: (64px * S.k);
             font-weight: 700;
             color: Theme.text;
             wrap: word-wrap;
             overflow: elide;
-            max-height: (180px * S.k);
+            max-width: (820px * S.k);
+            max-height: (160px * S.k);
         }
-        Rectangle { height: (22px * S.k); }
-        HorizontalLayout {
-            spacing: (10px * S.k);
-            alignment: start;
-            for c in data.chips: Chip { data: c; }
-        }
-        Rectangle { height: (20px * S.k); }
-        Text {
-            text: data.desc;
-            font-size: (21px * S.k);
-            color: Theme.text2;
-            // Two lines at most: the Game Hub has the rest.
-            wrap: word-wrap;
-            overflow: elide;
-            max-width: (780px * S.k);
-            max-height: (54px * S.k);
-        }
-        Rectangle { height: (34px * S.k); }
+        Rectangle { height: (36px * S.k); }
         HorizontalLayout {
             spacing: (16px * S.k);
             alignment: start;
@@ -222,6 +208,18 @@ export component AppWindow inherits Window {
 
     in property <HubData> hub;
     in property <bool> hub-open;
+    // The Hub was opened from Home's cards: it rises from under Home, as the page scrolling on.
+    in property <bool> hub-scrolled;
+    // The Welcome tile is selected: its widgets (src/welcome.rs) show in place of a game's hero.
+    in property <bool> home-welcome;
+    in property <[WidgetData]> welcome;
+    callback home-wheel(float);
+    // How far Home has scrolled up: enough to show the Hub's cards whole while one is chosen,
+    // and on under the Hub that rises over it.
+    property <length> home-lift: root.view != 0 ? 0
+        : root.overlay == 0 && root.zone == Zone.home-peek ? (92px * S.k)
+        : root.hub-open && root.hub-scrolled ? root.height * 0.4
+        : 0;
     in property <bool> home-has-game: true;
     in-out property <length> hub-content-h;
     out property <length> hub-text-w: min((1060px * S.k), root.width - (540px * S.k) - (96px * S.k));
@@ -419,8 +417,19 @@ export component AppWindow inherits Window {
             opacity: root.view == 0 ? 1 : 0;
             visible: self.opacity > 0;
             x: root.view == 0 ? 0 : -(40px * S.k);
+            y: -root.home-lift;
             animate opacity { duration: 260ms; easing: ease-out-quad; }
             animate x { duration: 420ms; easing: ease-out-expo; }
+            animate y { duration: 460ms; easing: ease-out-expo; }
+
+            // The wheel scrolls Home like a page (down to the cards, then into the Hub). Under
+            // everything: the tile row's own wheel and the buttons come first.
+            TouchArea {
+                scroll-event(e) => {
+                    root.home-wheel(e.delta-y / 1px);
+                    return EventResult.accept;
+                }
+            }
 
             // Tile row: the selected tile is larger with its name beside it (PS5 home).
             property <length> big: (172px * S.k);
@@ -432,6 +441,9 @@ export component AppWindow inherits Window {
             Rectangle {
                 y: (128px * S.k);
                 height: (210px * S.k);
+                // Scrolled off under the tabs while Home is scrolled down.
+                opacity: root.home-lift > 0 ? 0 : 1;
+                animate opacity { duration: 220ms; easing: ease-out-quad; }
                 for t[i] in root.tiles: Rectangle {
                     x: i < root.sel ? home.x0 - (root.sel - i) * (home.small + home.gap) - home.gap
                         : i == root.sel ? home.x0 : home.x0 + home.big + home.label-w + (i - root.sel - 1) * (home.small + home.gap);
@@ -446,11 +458,18 @@ export component AppWindow inherits Window {
                     Rectangle {
                         border-radius: (18px * S.k);
                         clip: true;
-                        background: t.special ? #ffffff1f : Theme.panel;
+                        background: t.welcome ? @linear-gradient(135deg, #0a3fb8 0%, #0a6cff 60%, #4d9bff 100%)
+                            : t.special ? #ffffff1f : Theme.panel;
                         border-width: t.special ? 1px : 0;
                         border-color: Theme.line;
                         drop-shadow-blur: 0;
-                        if !t.special: Image {
+                        if t.welcome: Image {
+                            source: Icons.sparkle;
+                            colorize: #ffffff;
+                            width: parent.width * 0.4;
+                            height: self.width;
+                        }
+                        if !t.special && !t.welcome: Image {
                             source: t.image;
                             width: parent.width;
                             height: parent.height;
@@ -556,7 +575,7 @@ export component AppWindow inherits Window {
 
             // Hero: two layers crossfade when the selection changes (the new game's details
             // rise in while the old ones fade), like the PS5 home screen.
-            if root.home-has-game: Rectangle {
+            if root.home-has-game && !root.home-welcome: Rectangle {
             for slot in [0, 1]: HeroView {
                 x: (96px * S.k);
                 width: (900px * S.k);
@@ -569,7 +588,72 @@ export component AppWindow inherits Window {
             }
             }
             // The Game Hub's cards peek at the bottom (Down reaches them; each opens the Hub there).
-            if root.home-peek.length > 0: HorizontalLayout {
+            // Welcome: six widgets, three by two, on glass over the wallpaper.
+            if root.home-has-game && root.home-welcome: Rectangle {
+                property <length> gap: (20px * S.k);
+                property <length> w: root.width - (192px * S.k);
+                property <length> cw: (self.w - self.gap * 2) / 3;
+                property <length> ch: min((210px * S.k), (root.height - (430px * S.k) - (110px * S.k)) / 2);
+                x: (96px * S.k);
+                y: (410px * S.k);
+                width: self.w;
+                height: self.ch * 2 + self.gap;
+                for wd[i] in root.welcome: widget := Rectangle {
+                    property <bool> f: root.zone == Zone.welcome && root.idx == i && root.overlay == 0;
+                    property <color> tone: wd.kind == 1 ? Theme.ok : wd.kind == 2 ? Theme.warn : wd.kind == 3 ? Theme.danger : Theme.text;
+                    x: mod(i, 3) * (parent.cw + parent.gap);
+                    y: floor(i / 3) * (parent.ch + parent.gap) - (f ? (8px * S.k) : 0);
+                    width: parent.cw;
+                    height: parent.ch;
+                    animate y { duration: 260ms; easing: ease-out-expo; }
+                    Rectangle {
+                        border-radius: (22px * S.k);
+                        background: widget.f ? #ffffff2b : #0a0f1d8c;
+                        border-width: 1px;
+                        border-color: widget.f ? #ffffff00 : #ffffff1f;
+                        animate background { duration: 200ms; }
+                    }
+                    FocusRing { w: parent.width; h: parent.height; on: widget.f; radius: (22px * S.k); glow: false; }
+                    VerticalLayout {
+                        padding: (24px * S.k);
+                        spacing: (6px * S.k);
+                        alignment: start;
+                        HorizontalLayout {
+                            spacing: (12px * S.k);
+                            alignment: start;
+                            Rectangle {
+                                width: (40px * S.k); height: self.width;
+                                border-radius: self.width / 2;
+                                background: #ffffff1a;
+                                Image {
+                                    source: wd.icon == 0 ? Icons.gamepad : wd.icon == 1 ? Icons.folder : wd.icon == 2 ? Icons.disk
+                                        : wd.icon == 3 ? Icons.sparkle : wd.icon == 4 ? Icons.grid : Icons.gear;
+                                    colorize: Theme.text;
+                                    width: (22px * S.k); height: self.width;
+                                }
+                            }
+                            Text { text: wd.title; font-size: (18px * S.k); font-weight: 600; color: Theme.text2; vertical-alignment: center; }
+                        }
+                        Rectangle { height: (6px * S.k); }
+                        Text { text: wd.value; font-size: (32px * S.k); font-weight: 700; color: widget.tone; overflow: elide; }
+                        Text { text: wd.sub; font-size: (17px * S.k); color: Theme.text2; overflow: elide; }
+                        if wd.progress >= 0: Rectangle {
+                            height: (6px * S.k);
+                            Rectangle { y: (4px * S.k); height: (6px * S.k); border-radius: (3px * S.k); background: #ffffff1f; }
+                            Rectangle {
+                                x: 0; y: (4px * S.k);
+                                width: parent.width * clamp(wd.progress, 0, 1);
+                                height: (6px * S.k);
+                                border-radius: (3px * S.k);
+                                background: widget.tone == Theme.text ? Theme.accent : widget.tone;
+                                animate width { duration: 400ms; }
+                            }
+                        }
+                    }
+                    TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.welcome, i); } }
+                }
+            }
+            if root.home-peek.length > 0 && !root.home-welcome: HorizontalLayout {
                 x: (96px * S.k);
                 y: root.height - (96px * S.k);
                 width: root.width - (192px * S.k);
@@ -581,9 +665,16 @@ export component AppWindow inherits Window {
                     width: (root.width - (192px * S.k) - (54px * S.k)) / 4;
                     y: f ? -(14px * S.k) : 0;
                     animate y { duration: 260ms; easing: ease-out-expo; }
-                    FocusRing { w: parent.width; h: parent.height; on: peek-card.f; radius: (18px * S.k); }
-                    // Over the ring: its halo fills its shape.
-                    Rectangle { border-radius: (18px * S.k); background: #141c33f0; border-width: 1px; border-color: Theme.line; }
+                    // Glass over the game's art: lighter when chosen, with the ring (no halo, which
+                    // would fill the card) around it.
+                    Rectangle {
+                        border-radius: (18px * S.k);
+                        background: peek-card.f ? #ffffff26 : #ffffff12;
+                        border-width: 1px;
+                        border-color: peek-card.f ? #ffffff00 : #ffffff1f;
+                        animate background { duration: 200ms; }
+                    }
+                    FocusRing { w: parent.width; h: parent.height; on: peek-card.f; radius: (18px * S.k); glow: false; }
                     VerticalLayout {
                         padding-left: (22px * S.k);
                         padding-right: (22px * S.k);
@@ -996,33 +1087,42 @@ export component AppWindow inherits Window {
                         }
                     }
                 }
-                // One glass pill (on the same glass as the Downloads page): Downloads (4), Settings
-                // (3), the battery, the clock. Downloads is the ring while something's happening
-                // (what's downloading or installing, what needs you, what just got ready), its icon
-                // otherwise; either way in the same place.
-                bar := Capsule {
+                // As on a console: round buttons on their own (Search, Downloads, Settings), then the
+                // battery and the clock in plain text. Downloads is the ring while something's
+                // happening (what's downloading or installing, what needs you, what just got ready),
+                // its icon otherwise; either way in the same place.
+                bar := HorizontalLayout {
                     property <color> ring-tint: root.ring-kind == 2 ? #c4b5fd : root.ring-kind == 3 ? #ffb547 : root.ring-kind == 4 ? #5eead4 : root.ring-kind == 5 ? Theme.ok : #8dbaff;
-                    // As tall as the tabs' row reads (the old 64px icons), centred on it.
                     y: (20px * S.k);
                     height: (64px * S.k);
-                    width: bar-row.preferred-width;
-                    glass: root.bar-glass; has-glass: root.bar-has-glass;
-                    glass-w: root.width; glass-h: root.height;
-                    // Lighter than the Downloads page's, as on the canvas.
-                    tint: #161c2e6b;
-                    bar-row := HorizontalLayout {
-                        padding: (7px * S.k);
-                        spacing: 0;
-                        // Downloads.
+                    spacing: (16px * S.k);
+                        // Search (the Library's, from anywhere).
+                        srch := Rectangle {
+                            property <bool> f: root.zone == Zone.top && root.idx == 5 && root.overlay == 0;
+                            height: (60px * S.k);
+                            y: (2px * S.k);
+                            width: self.height;
+                            border-radius: self.height / 2;
+                            background: self.f ? #f5f7fb : ta-srch.has-hover ? #ffffff2e : #0a0f1d80;
+                            border-width: self.f ? 0 : 1px;
+                            border-color: #ffffff1f;
+                            animate background { duration: 120ms; }
+                            Image { source: Icons.search; colorize: srch.f ? #0a0d18 : Theme.text; width: (26px * S.k); height: self.width; }
+                            ta-srch := TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.top, 5); } }
+                        }
                         dl := Rectangle {
                             property <bool> f: root.zone == Zone.top && root.idx == 4 && root.overlay == 0;
-                            width: dl-row.preferred-width;
+                            width: max((60px * S.k), dl-row.preferred-width);
                             border-radius: self.height / 2;
-                            background: self.f ? #f5f7fb : ta-dl.has-hover ? #ffffff1a : transparent;
+                            height: (60px * S.k);
+                            y: (2px * S.k);
+                            background: self.f ? #f5f7fb : ta-dl.has-hover ? #ffffff2e : #0a0f1d80;
+                            border-width: self.f ? 0 : 1px;
+                            border-color: #ffffff1f;
                             animate background { duration: 120ms; }
                             dl-row := HorizontalLayout {
-                                padding-left: root.ring-kind > 0 ? (10px * S.k) : (12px * S.k);
-                                padding-right: root.ring-kind > 0 ? (18px * S.k) : (12px * S.k);
+                                padding-left: root.ring-kind > 0 ? (14px * S.k) : (16px * S.k);
+                                padding-right: root.ring-kind > 0 ? (20px * S.k) : (16px * S.k);
                                 spacing: (12px * S.k);
                                 if root.ring-kind > 0: Rectangle {
                                     width: (32px * S.k); height: self.width; y: (parent.height - self.height) / 2;
@@ -1072,13 +1172,15 @@ export component AppWindow inherits Window {
                             }
                             ta-dl := TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.top, 4); } }
                         }
-                        Rectangle { width: (13px * S.k); Rectangle { width: 1px; height: (28px * S.k); background: #ffffff29; } }
-                        // Settings.
                         gear := Rectangle {
                             property <bool> f: root.zone == Zone.top && root.idx == 3 && root.overlay == 0;
                             width: self.height;
                             border-radius: self.height / 2;
-                            background: self.f ? #f5f7fb : ta-gear.has-hover ? #ffffff1a : transparent;
+                            height: (60px * S.k);
+                            y: (2px * S.k);
+                            background: self.f ? #f5f7fb : ta-gear.has-hover ? #ffffff2e : #0a0f1d80;
+                            border-width: self.f ? 0 : 1px;
+                            border-color: #ffffff1f;
                             animate background { duration: 120ms; }
                             Image { source: Icons.gear; colorize: gear.f ? #0a0d18 : Theme.text2; width: (28px * S.k); height: self.width; }
                             // On the gear's top right, ringed in the bar's colour so it stands off the teeth.
@@ -1088,12 +1190,13 @@ export component AppWindow inherits Window {
                                 border-radius: self.width / 2;
                                 background: Theme.warn;
                                 border-width: (2.5px * S.k);
-                                border-color: gear.f ? #f5f7fb : #1b2133;
+                                border-color: gear.f ? #f5f7fb : #0a0f1d;
                             }
                             ta-gear := TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.top, 3); } }
                         }
-                        Rectangle { width: (13px * S.k); Rectangle { width: 1px; height: (28px * S.k); background: #ffffff29; } }
-                        // The battery: green, amber at 20% or less, red at 10% or less (unless charging).
+                        HorizontalLayout {
+                            padding-left: (10px * S.k);
+                            spacing: 0;
                         if root.battery-shown: bat := HorizontalLayout {
                             property <color> level: root.battery-plugged ? Theme.ok
                                 : root.battery-percent <= 10 ? Theme.danger : root.battery-percent <= 20 ? Theme.warn : Theme.text;
@@ -1144,17 +1247,15 @@ export component AppWindow inherits Window {
                                 vertical-alignment: center;
                             }
                         }
-                        if root.battery-shown: Rectangle { width: (13px * S.k); Rectangle { width: 1px; height: (28px * S.k); background: #ffffff29; } }
-                        Text {
-                            text: root.clock;
-                            font-size: (24px * S.k); font-weight: 600;
-                            color: Theme.text;
-                            vertical-alignment: center;
-                            horizontal-alignment: center;
-                            min-width: (104px * S.k);
+                            Text {
+                                text: root.clock;
+                                font-size: (26px * S.k); font-weight: 500;
+                                color: Theme.text;
+                                vertical-alignment: center;
+                                horizontal-alignment: right;
+                                min-width: (110px * S.k);
+                            }
                         }
-                        Rectangle { width: (12px * S.k); }
-                    }
                 }
             }
         }
@@ -1164,7 +1265,8 @@ export component AppWindow inherits Window {
         // sits on top of Library titles or panels.
         if root.status != "" && root.view == 0 && root.overlay == 0: Rectangle {
             x: (76px * S.k);
-            y: root.height - self.height - (30px * S.k) - (root.home-peek.length > 0 ? (96px * S.k) : 0);
+            y: root.height - self.height - (30px * S.k) - (root.home-peek.length > 0 ? (96px * S.k) : 0) - root.home-lift;
+            animate y { duration: 460ms; easing: ease-out-expo; }
             width: status-row.preferred-width;
             height: (50px * S.k);
             border-radius: (25px * S.k);
@@ -1188,7 +1290,8 @@ export component AppWindow inherits Window {
         Rectangle {
             x: root.width - self.width - (76px * S.k);
             // Over the Game Hub's cards on Home.
-            y: root.height - self.height - (30px * S.k) - (root.view == 0 && root.overlay == 0 && root.home-peek.length > 0 ? (96px * S.k) : 0);
+            y: root.height - self.height - (30px * S.k) - (root.view == 0 && root.overlay == 0 && root.home-peek.length > 0 ? (96px * S.k) + root.home-lift : 0);
+            animate y { duration: 460ms; easing: ease-out-expo; }
             width: hints.preferred-width;
             height: (50px * S.k);
             border-radius: (25px * S.k);
@@ -1206,7 +1309,7 @@ export component AppWindow inherits Window {
                 spacing: (24px * S.k);
                 alignment: center;
                 // Only keys that do something on the current screen.
-                for h in root.overlay == 0 && !root.home-has-game
+                for h in root.overlay == 0 && (!root.home-has-game || (root.view == 0 && root.home-welcome))
                     ? (root.pad-hints ? [{k: "✕", l: "Select", c: #8fb6ff, r: true}] : [{k: "Enter", l: "Select", c: #ffffff, r: false}])
                     : root.overlay == 0
                     ? (root.pad-hints
@@ -1233,7 +1336,10 @@ export component AppWindow inherits Window {
             property <bool> entered: false;
             init => { entered = true; }
             opacity: entered ? 1 : 0;
+            // From Home's cards it rises from below, as the page scrolling on.
+            y: entered || !root.hub-scrolled ? 0 : root.height * 0.4;
             animate opacity { duration: 240ms; easing: ease-out-quad; }
+            animate y { duration: 460ms; easing: ease-out-expo; }
             Image {
                 source: root.bg-show-b ? root.bg-b : root.bg-a;
                 width: root.width;

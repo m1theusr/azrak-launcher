@@ -21,6 +21,7 @@ mod pcgame;
 mod os;
 mod exfat;
 mod control_center;
+mod welcome;
 mod pfs;
 mod rar;
 mod package;

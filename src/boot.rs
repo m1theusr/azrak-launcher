@@ -304,7 +304,7 @@ impl App {
         for i in 0..3.min(self.row.len()) {
             reqs.extend(self.hero_bg_url(i));
             if let Some(it) = self.row.get(i).copied() {
-                if it != RowItem::All {
+                if it.is_game() {
                     let info = self.target_info(self.row_target(i));
                     reqs.extend(info.as_ref().and_then(|x| crate::present::req_url(&x.logo, 960, 0.0)));
                 }

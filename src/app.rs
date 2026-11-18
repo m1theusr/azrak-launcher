@@ -52,6 +52,7 @@ pub const Z_SETTINGS_NAV: i32 = 26;
 pub const Z_CONTROL_CENTER: i32 = 27;
 /// The Game Hub's cards peeking at the bottom of Home (present.rs, peek_cards).
 pub const Z_HOME_PEEK: i32 = 28;
+pub const Z_WELCOME: i32 = 29;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Overlay {
@@ -162,6 +163,13 @@ pub enum RowItem {
     #[allow(dead_code)] // catalog games no longer appear on the Games tab
     Cat(usize),
     All,
+    /// Home's first tile: SwarmPlay's Welcome, with its widgets (src/welcome.rs).
+    Welcome,
+}
+
+impl RowItem {
+    /// A game's tile (not the Library's or the Welcome).
+    pub fn is_game(self) -> bool { matches!(self, Self::Local(_) | Self::Cat(_)) }
 }
 
 /// What the game hub / options menu is showing.
@@ -391,6 +399,8 @@ pub struct App {
     /// The laptop's battery as last read.
     pub battery: Option<crate::battery::Battery>,
     battery_read: f64,
+    /// When the Welcome's widgets were last read (src/welcome.rs).
+    pub welcome_read: f64,
     pub power: crate::os::power::PowerAsk,
     /// This PC's processor, memory and graphics (read in the background at start).
     pub pc: Option<crate::pc::Reading>,
@@ -698,6 +708,7 @@ pub fn run(ui: AppWindow, monitors: Vec<Monitor>, target_monitor: Option<Monitor
         sk: Default::default(),
         battery: None,
         battery_read: 0.0,
+        welcome_read: 0.0,
         power: Default::default(),
         pc: None,
         pc_checking: false,
@@ -835,6 +846,16 @@ fn wire_callbacks(ui: &AppWindow) {
                 app.select_tile(app.sel as i64 + if d > 0.0 { 1 } else { -1 });
             }
         })
+    });
+    // The wheel over Home scrolls it like a page: down to the Game Hub's cards, then into the
+    // Hub; up back to the game. One step per gesture (a touchpad sends a stream of small ones).
+    let last_step = std::rc::Rc::new(std::cell::Cell::new(None::<std::time::Instant>));
+    ui.on_home_wheel(move |dy| {
+        if dy.abs() < 1.0 || last_step.get().is_some_and(|t| t.elapsed() < Duration::from_millis(350)) {
+            return;
+        }
+        last_step.set(Some(std::time::Instant::now()));
+        with_app(move |app| app.home_wheel(dy))
     });
     ui.on_grid_scrolled(|| with_app(|app| app.push_grid_window()));
     ui.on_grid_wheel(|dy| with_app(move |app| app.grid_wheel(dy)));
@@ -1072,9 +1093,12 @@ impl App {
             };
             seen.insert(key)
         }).map(RowItem::Local).collect();
-        // Games tab = your installed games only; the whole catalog is the Library tab.
-        self.row = row;
-        self.sel = prev.and_then(|p| self.row.iter().position(|r| *r == p)).unwrap_or(self.sel.min(self.row.len().saturating_sub(1)));
+        // Games tab = your installed games only; the whole catalog is the Library tab. With
+        // games, the Welcome comes first, as on a console; Home opens on the last game played.
+        let first = prev.is_none();
+        self.row = if row.is_empty() { row } else { std::iter::once(RowItem::Welcome).chain(row).collect() };
+        self.sel = prev.and_then(|p| self.row.iter().position(|r| *r == p))
+            .unwrap_or(if first && self.row.len() > 1 { 1 } else { self.sel.min(self.row.len().saturating_sub(1)) });
     }
 
     /// Whether each game's card shows in the Library before a search: it has a picture, or it's
@@ -1458,7 +1482,7 @@ impl App {
         for i in 0..self.row.len() {
             first.extend(url(self.tile_req(self.row[i])));
             first.extend(url(self.hero_bg_url(i)));
-            if self.row[i] != RowItem::All {
+            if self.row[i].is_game() {
                 let info = self.target_info(self.row_target(i));
                 first.extend(url(info.as_ref().and_then(|x| crate::present::req_url(&x.logo, 960, 0.0))));
             }
@@ -1467,7 +1491,7 @@ impl App {
         let mut rest: Vec<String> = Vec::new();
         // Screenshots of the games on the Home row (the ones most likely to be opened).
         for i in 0..self.row.len() {
-            if self.row[i] != RowItem::All {
+            if self.row[i].is_game() {
                 if let Some(info) = self.target_info(self.row_target(i)) {
                     rest.extend(info.shots.iter().take(8).filter_map(|u| url(crate::present::req_url(u, 480, 0.0))));
                 }
@@ -1849,6 +1873,7 @@ impl App {
             self.clock = clock;
         }
         self.battery_tick();
+        self.welcome_tick();
         let running = match self.live.first() {
             Some(s) => crate::RunningData { active: true, name: s.name.clone().into(), time: util::fmt_clock(util::now_secs() - s.since).into(), note: if util::now_secs() - self.running_note.1 < 8.0 { self.running_note.0.clone().into() } else { Default::default() } },
             None => { self.running_note.0.clear(); crate::RunningData::default() }
@@ -2192,8 +2217,8 @@ impl App {
     /// The top bar's buttons: 0–1 a running game's Resume and Stop, 3 Settings, 4 Downloads. (2 was
     /// a search button, which only led to the Library's own search: △ or / still gets there.)
     fn top_items(&self) -> Vec<i32> {
-        // Downloads (the ring, or its icon) always before Settings.
-        if self.live.is_empty() { vec![4, 3] } else { vec![0, 1, 4, 3] }
+        // Search, Downloads (the ring, or its icon), Settings, as the round buttons stand.
+        if self.live.is_empty() { vec![5, 4, 3] } else { vec![0, 1, 5, 4, 3] }
     }
 
     pub fn act(&mut self, a: Act) {
@@ -2283,16 +2308,19 @@ impl App {
                         1 => self.stop_game(None),
                         // The ring's download (what stopped, or what's going) is the one shown.
                         4 => { let key = self.ring_key.clone(); self.open_downloads(key.as_deref()) }
+                        5 => self.open_search(),
                         _ => self.open_settings(),
                     },
                     _ => {}
                 }
             }
+            Z_WELCOME => self.act_welcome(a),
             Z_HOME_PEEK => match a {
                 Act::Left if self.idx > 0 => self.move_focus(Z_HOME_PEEK, self.idx - 1),
                 Act::Right if (self.idx as usize) + 1 < self.home_peek => self.move_focus(Z_HOME_PEEK, self.idx + 1),
                 Act::Up => self.move_focus(Z_ACTIONS, 0),
-                Act::Confirm => {
+                // Down scrolls on into the Game Hub, as Enter opens it: at the card's section.
+                Act::Confirm | Act::Down => {
                     let t = self.row_target(self.sel);
                     self.open_hub_at(t, self.idx);
                 }
@@ -2304,6 +2332,7 @@ impl App {
                 Act::First | Act::PageUp => self.select_tile(0),
                 Act::Last | Act::PageDown => self.select_tile(self.row.len() as i64 - 1),
                 Act::Up => self.move_focus(Z_TABS, 0),
+                Act::Down if self.row.get(self.sel) == Some(&RowItem::Welcome) => self.move_focus(Z_WELCOME, 0),
                 Act::Down if !self.hero_actions.is_empty() => self.move_focus(Z_ACTIONS, 0),
                 Act::Confirm => self.activate_row(),
                 _ => {}
@@ -2565,6 +2594,8 @@ impl App {
         }
         let shots = self.hub_shots.len() as i32;
         match (self.zone, a) {
+            // A Hub scrolled into from Home: Up from its top scrolls back to the cards.
+            (Z_HUB, Act::Up) if self.ui().get_hub_scrolled() && self.stack.len() == 1 => self.back(),
             (Z_HUB, Act::Left) if self.idx > 0 => self.move_focus(Z_HUB, self.idx - 1),
             (Z_HUB, Act::Right) if (self.idx as usize) + 1 < self.hub_actions.len() => self.move_focus(Z_HUB, self.idx + 1),
             (Z_HUB | Z_VERSIONS | Z_RELEASES, Act::Down) => {
@@ -2821,6 +2852,7 @@ impl App {
     fn activate_row(&mut self) {
         match self.row.get(self.sel).copied() {
             Some(RowItem::All) => self.switch_view(1, true),
+            Some(RowItem::Welcome) => self.move_focus(Z_WELCOME, 0),
             Some(RowItem::Local(l)) => {
                 if self.session_for_local(l).is_some() {
                     let key = self.locals[l].l.id.clone();
@@ -3194,11 +3226,22 @@ impl App {
         self.trailer_tick();
     }
 
+    /// One wheel step over Home (`dy` < 0: down), as Down or Up from the hero's buttons and
+    /// the Hub's cards; elsewhere on Home (the tile row) it does nothing.
+    pub fn home_wheel(&mut self, dy: f32) {
+        if self.view != 0 || self.overlay != Overlay::None || !matches!(self.zone, Z_ACTIONS | Z_HOME_PEEK) {
+            return;
+        }
+        self.act(if dy < 0.0 { Act::Down } else { Act::Up });
+    }
+
     /// The Game Hub, opened at one of the cards peeking under Home: 0 its top (compatibility),
     /// 1 the releases, 2 the screenshots, 3 the technical details (opened).
     pub fn open_hub_at(&mut self, t: Target, card: i32) {
         audio::play(Sound::Select);
         self.open_hub(t);
+        // It rises from under Home, as the page scrolling on (ui/app.slint).
+        self.ui().set_hub_scrolled(true);
         match card {
             1 => self.hub_step(1),
             2 if !self.hub_shots.is_empty() => { self.set_focus(Z_SHOTS, 0); self.prefetch_viewer(); }
@@ -3216,6 +3259,7 @@ impl App {
         // Its notes show here from now on.
         self.library_waiting = None;
         self.ui().set_hub_details_open(false);
+        self.ui().set_hub_scrolled(false);
         if *crate::images::DEBUG {
             let ui = self.ui();
             slint::Timer::single_shot(Duration::from_millis(1500), move || {
