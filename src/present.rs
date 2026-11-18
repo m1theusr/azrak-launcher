@@ -1131,7 +1131,7 @@ impl App {
             keys.insert(r.key.clone());
             match self.get_img(&lr, prio::DETAIL) {
                 Some(img) => {
-                    let (w, hh) = logo_size(&img, 700.0, 220.0);
+                    let (w, hh) = logo_size(&img, 520.0, 170.0);
                     h.logo = img;
                     h.has_logo = true;
                     h.logo_w = w * self.scale;
@@ -1370,25 +1370,23 @@ impl App {
     }
 
     pub fn scroll_hub(&mut self) {
-        // Rough layout estimate (see app.slint hub column).
-        let facts_rows = self.ui().get_hub().facts.row_count() as f32;
-        let details = if self.ui().get_hub_details_open() {
-            self.ui().get_hub().details.iter().map(|row| row.items.row_count()).sum::<usize>() as f32 * 38.0
-        } else { 0.0 };
-        // The verdict (~100) and the line under Download (~36) sit above the screenshots too.
-        let versions = if self.ui().get_hub().versions.row_count() > 0 { 170.0 } else { 0.0 };
-        let shots_top = 130.0 + 30.0 + 16.0 + 210.0 + 22.0 + 40.0 + 30.0 + 68.0 + 160.0 + 80.0 + versions + facts_rows * 106.0 + details;
+        // The Hub's sections report where they start (ui/app.slint): the chosen one comes to
+        // just under the top, as a page scrolls on a console.
         let ui = self.ui();
+        let at = |l: f32| l / self.scale - 110.0;
         // Never scroll past the real end of the page (measured by the UI, not estimated).
         let max = ((ui.get_hub_content_h() - ui.get_hub_view_h()) / self.scale).max(0.0);
+        let about = at(ui.get_hub_at_about());
         let y = match self.zone {
-            Z_SHOTS => (shots_top - 320.0).max(0.0),
-            Z_DESC => shots_top + if self.hub_shots.is_empty() { 0.0 } else { 230.0 } - 200.0 + self.idx as f32 * 360.0,
+            Z_VERSIONS | Z_RELEASES => at(ui.get_hub_at_versions()),
+            Z_SHOTS => at(ui.get_hub_at_shots()),
+            Z_HUB_DETAILS => at(ui.get_hub_at_details()),
+            Z_DESC => about + self.idx as f32 * 360.0,
             _ => 0.0,
         };
         if self.zone == Z_DESC && y > max && self.idx > 0 {
             // At the bottom already: don't let further presses build up.
-            self.idx = ((max - (shots_top + if self.hub_shots.is_empty() { 0.0 } else { 230.0 } - 200.0)) / 360.0).ceil().max(0.0) as i32;
+            self.idx = ((max - about) / 360.0).ceil().max(0.0) as i32;
         }
         ui.set_hub_y(-y.clamp(0.0, max) * self.scale);
     }
@@ -1407,9 +1405,9 @@ impl App {
     pub fn scroll_shots(&mut self) {
         self.prefetch_viewer();
         let (w, _) = self.logical_size();
-        let view = (w - 540.0 - 96.0).min(1060.0) + 60.0;
-        let x = self.idx as f32 * 314.0;
-        let total = self.hub_shots.len() as f32 * 314.0 + 72.0;
+        let view = w - 96.0 + 30.0;
+        let x = self.idx as f32 * 424.0;
+        let total = self.hub_shots.len() as f32 * 424.0 + 72.0;
         self.ui().set_shots_x(-(x - view * 0.4).clamp(0.0, (total - view).max(0.0)) * self.scale);
     }
 

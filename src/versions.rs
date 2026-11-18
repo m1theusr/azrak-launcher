@@ -274,7 +274,10 @@ impl App {
     pub fn hub_step(&mut self, d: i32) {
         let current = self.hub.and_then(|t| t.game);
         let releases = current.is_some_and(|i| self.release_count(i) > 1);
-        let rows: Vec<i32> = [Some(Z_HUB), (self.hub_version_count() > 0).then_some(Z_VERSIONS), releases.then_some(Z_RELEASES), Some(Z_HUB_DETAILS)]
+        // In the page's order: the buttons, Compatibility (no stop), Versions, the trailers and
+        // screenshots, Details.
+        let shots = !self.hub_shots.is_empty();
+        let rows: Vec<i32> = [Some(Z_HUB), (self.hub_version_count() > 0).then_some(Z_VERSIONS), releases.then_some(Z_RELEASES), shots.then_some(Z_SHOTS), Some(Z_HUB_DETAILS)]
             .into_iter().flatten().collect();
         let Some(at) = rows.iter().position(|z| *z == self.zone) else { return };
         let Some(&to) = usize::try_from(at as i32 + d).ok().and_then(|n| rows.get(n)) else { return };
@@ -285,6 +288,10 @@ impl App {
             0
         };
         self.move_focus(to, idx);
+        if to == Z_SHOTS {
+            self.ui().set_shots_x(0.0);
+            self.prefetch_viewer();
+        }
     }
 
     /// The Game Hub's "Play it on" row: one tile per platform.

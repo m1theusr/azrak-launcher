@@ -10,6 +10,7 @@
 use crate::app::*;
 use crate::audio::{self, Sound};
 use crate::{util, WidgetData};
+use slint::Model;
 
 /// The widgets, in focus order (three a row).
 const WIDGETS: [&str; 6] = ["controller", "storage", "downloads", "news", "games", "emulators"];
@@ -30,7 +31,14 @@ impl App {
         let ui = self.ui();
         ui.set_home_welcome(on);
         if on {
-            ui.set_welcome(model(self.welcome_widgets()));
+            // In place: new rows would come in again (their entrance) every refresh.
+            let widgets = self.welcome_widgets();
+            let shown = ui.get_welcome();
+            if shown.row_count() == widgets.len() {
+                for (i, w) in widgets.into_iter().enumerate() { shown.set_row_data(i, w); }
+            } else {
+                ui.set_welcome(model(widgets));
+            }
         }
         self.welcome_read = util::now_secs();
     }
