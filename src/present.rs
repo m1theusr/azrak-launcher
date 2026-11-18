@@ -333,6 +333,27 @@ impl App {
         (String::new(), String::new(), false)
     }
 
+    /// The Game Hub's sections as cards peeking under Home, each with a line about it:
+    /// Compatibility, Versions, Trailers & screenshots, Details (open_hub_at opens each).
+    fn peek_cards(&self, t: Target) -> Vec<Fact> {
+        let info = self.target_info(t);
+        let g = t.game.map(|g| &self.games[g]);
+        let compat = self.target_compat(t).map(|e| compat_chip(Some(e), self.target_platform(t)).text.to_string())
+            .unwrap_or_else(|| "Not tested yet".into());
+        let releases = t.game.map(|i| self.groups.releases(i).len()).unwrap_or(0);
+        let versions = match releases { 0 => "Installed on this PC".to_string(), 1 => "1 release".to_string(), n => format!("{n} releases") };
+        let shots = info.as_ref().map(|i| i.shots.len()).unwrap_or(0);
+        let trailer = info.as_ref().is_some_and(|i| !i.video.is_empty());
+        let media = match (shots, trailer) {
+            (0, false) => "None yet".to_string(),
+            (0, true) => "Trailer".to_string(),
+            (n, t) => format!("{n} screenshots{}", if t { " · trailer" } else { "" }),
+        };
+        let details = g.and_then(|g| size_label(&g.g)).map(|s| format!("{s} · files and paths")).unwrap_or_else(|| "Files and paths".into());
+        [("Compatibility", compat), ("Versions", versions), ("Trailers & screenshots", media), ("Details", details)]
+            .into_iter().map(|(k, v)| Fact { key: k.into(), value: v.into(), kind: 0 }).collect()
+    }
+
     fn chips_for(&self, t: Target) -> Vec<ChipData> {
         let info = self.target_info(t);
         let g = t.game.map(|g| &self.games[g]);
@@ -377,6 +398,7 @@ impl App {
     pub fn push_hero(&mut self) {
         let it = self.row.get(self.sel).copied();
         let mut h = HeroData::default();
+        let mut peek: Vec<Fact> = Vec::new();
         self.hero_logo_key.clear();
         match it {
             None => {
@@ -445,9 +467,15 @@ impl App {
                     (h.note, h.note_warn) = (note.into(), warn);
                 }
                 self.hero_actions = self.actions_for(t, false);
+                if t.local.is_some() { peek = self.peek_cards(t); }
             }
         }
         h.actions = model(self.hero_actions.iter().map(action_data).collect());
+        self.home_peek = peek.len();
+        if self.zone == Z_HOME_PEEK && (self.home_peek == 0 || self.idx as usize >= self.home_peek) && self.overlay == Overlay::None {
+            self.set_focus(Z_ACTIONS, 0);
+        }
+        self.ui().set_home_peek(model(peek));
         // No tiles to select: selection lives on the buttons.
         if self.row.is_empty() && self.zone == Z_ROW && self.overlay == Overlay::None && !self.hero_actions.is_empty() {
             self.set_focus(Z_ACTIONS, 0);

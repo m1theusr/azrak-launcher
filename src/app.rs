@@ -50,6 +50,8 @@ pub const Z_SETUP: i32 = 25;
 /// Settings' left column: its sections, and Quit under them.
 pub const Z_SETTINGS_NAV: i32 = 26;
 pub const Z_CONTROL_CENTER: i32 = 27;
+/// The Game Hub's cards peeking at the bottom of Home (present.rs, peek_cards).
+pub const Z_HOME_PEEK: i32 = 28;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Overlay {
@@ -250,6 +252,8 @@ pub struct App {
     pub row: Vec<RowItem>,
     pub sel: usize,
     pub hero_actions: Vec<ActionDef>,
+    /// How many Game Hub cards peek at the bottom of Home (0: none for this tile).
+    pub home_peek: usize,
     pub bg_key: String,
     pub bg_show_b: bool,
 
@@ -608,6 +612,7 @@ pub fn run(ui: AppWindow, monitors: Vec<Monitor>, target_monitor: Option<Monitor
         row: Vec::new(),
         sel: 0,
         hero_actions: Vec::new(),
+        home_peek: 0,
         bg_key: String::new(),
         bg_show_b: false,
         filtered: Vec::new(),
@@ -2283,6 +2288,16 @@ impl App {
                     _ => {}
                 }
             }
+            Z_HOME_PEEK => match a {
+                Act::Left if self.idx > 0 => self.move_focus(Z_HOME_PEEK, self.idx - 1),
+                Act::Right if (self.idx as usize) + 1 < self.home_peek => self.move_focus(Z_HOME_PEEK, self.idx + 1),
+                Act::Up => self.move_focus(Z_ACTIONS, 0),
+                Act::Confirm => {
+                    let t = self.row_target(self.sel);
+                    self.open_hub_at(t, self.idx);
+                }
+                _ => {}
+            },
             Z_ROW => match a {
                 Act::Left => self.select_tile(self.sel as i64 - 1),
                 Act::Right => self.select_tile(self.sel as i64 + 1),
@@ -2298,6 +2313,7 @@ impl App {
                 Act::Right if (self.idx as usize) + 1 < self.hero_actions.len() => self.move_focus(Z_ACTIONS, self.idx + 1),
                 Act::Up if self.row.is_empty() => self.move_focus(Z_TABS, 0),
                 Act::Up => self.move_focus(self.home_zone(), 0),
+                Act::Down if self.home_peek > 0 => self.move_focus(Z_HOME_PEEK, 0),
                 Act::Confirm => {
                     if let Some(act) = self.hero_actions.get(self.idx as usize).map(|a| a.id) {
                         let t = self.row_target(self.sel);
@@ -2848,8 +2864,12 @@ impl App {
                 a.push(mk("play", "Play", "play", true));
             }
         }
-        if !in_hub && (t.game.is_some() || t.local.is_some()) {
-            a.push(mk("hub", if t.local.is_some() { "Game Hub" } else { "View Game" }, "info", t.local.is_none()));
+        // An installed game's Hub is the cards at the bottom of Home (Down): its other button is
+        // a round "···" for the Options menu, as on a console.
+        if !in_hub && t.local.is_some() {
+            a.push(ActionDef { round: true, ..mk("options", "Options", "more", false) });
+        } else if !in_hub && t.game.is_some() {
+            a.push(mk("hub", "View Game", "info", true));
         }
         let pkg = t.game.is_some_and(|g| self.games[g].g.is_pkg());
         if t.local.is_none() && pkg && self.download_for_target(t).is_none() {
@@ -2920,6 +2940,7 @@ impl App {
                 audio::play(Sound::Select);
                 self.open_hub(t);
             }
+            "options" => self.open_menu(t),
             "trailer" => self.play_trailer(t),
             "download" => self.prepare_download(t),
             "pkg_info" => {
@@ -3171,6 +3192,24 @@ impl App {
         }
         self.show_trailer_controls();
         self.trailer_tick();
+    }
+
+    /// The Game Hub, opened at one of the cards peeking under Home: 0 its top (compatibility),
+    /// 1 the releases, 2 the screenshots, 3 the technical details (opened).
+    pub fn open_hub_at(&mut self, t: Target, card: i32) {
+        audio::play(Sound::Select);
+        self.open_hub(t);
+        match card {
+            1 => self.hub_step(1),
+            2 if !self.hub_shots.is_empty() => { self.set_focus(Z_SHOTS, 0); self.prefetch_viewer(); }
+            2 | 3 => {
+                self.set_focus(Z_HUB_DETAILS, 0);
+                // Opened, as pressing it in the Hub does (Down then reads on, as there).
+                if card == 3 { self.ui().set_hub_details_open(true); }
+            }
+            _ => return,
+        }
+        self.scroll_hub();
     }
 
     pub fn open_hub(&mut self, t: Target) {

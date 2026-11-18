@@ -30,7 +30,8 @@ STEPS = [
     ("00-notification", []),
     ("01-home", ["sleep:9"]),
     ("02-home-new-game", ["Right", "Right"]),
-    ("03-hub", ["Down", "Right", "Return", "sleep:1.5"]),   # the "Game Hub" button (never Play)
+    ("02b-home-peek", ["Left", "Left", "Down", "Down", "sleep:0.8"]),  # the Game Hub cards under Home
+    ("03-hub", ["Return", "sleep:1.5"]),   # the Compatibility card opens the Hub (never Play)
     ("04-hub-scrolled", ["Down", "Down", "sleep:0.8"]),
     ("05-library", ["Escape", "Escape", "Up", "Up", "Right", "Return", "sleep:1.5"]),
     ("06-library-down", ["Down", "Down", "Down", "sleep:1"]),

@@ -99,6 +99,8 @@ export component AppWindow inherits Window {
     in property <int> zone;
     in property <int> idx;
     in property <string> clock;
+    // The Game Hub's sections peeking under Home (title, a line about it); none: not shown.
+    in property <[Fact]> home-peek;
     // On AzrakOS (the launcher is the whole system): Power shuts down instead of quitting.
     in property <bool> on-os;
     // A laptop's battery (src/battery.rs): shown next to the clock when the PC has one.
@@ -559,12 +561,40 @@ export component AppWindow inherits Window {
                 x: (96px * S.k);
                 width: (900px * S.k);
                 base-y: (360px * S.k);
-                height: root.height - (360px * S.k) - (112px * S.k);
+                height: root.height - (360px * S.k) - (root.home-peek.length > 0 ? (196px * S.k) : (112px * S.k));
                 data: slot == 0 ? root.hero : root.hero-b;
                 front: (slot == 1) == root.hero-front-b;
                 focus-idx: root.zone == Zone.actions && root.overlay == 0 ? root.idx : -1;
                 action(i) => { root.click(Zone.actions, i); }
             }
+            }
+            // The Game Hub's cards peek at the bottom (Down reaches them; each opens the Hub there).
+            if root.home-peek.length > 0: HorizontalLayout {
+                x: (96px * S.k);
+                y: root.height - (96px * S.k);
+                width: root.width - (192px * S.k);
+                height: (150px * S.k);
+                spacing: (18px * S.k);
+                for p[i] in root.home-peek: peek-card := Rectangle {
+                    property <bool> f: root.zone == Zone.home-peek && root.idx == i && root.overlay == 0;
+                    // Equal columns, whatever their text.
+                    width: (root.width - (192px * S.k) - (54px * S.k)) / 4;
+                    y: f ? -(14px * S.k) : 0;
+                    animate y { duration: 260ms; easing: ease-out-expo; }
+                    FocusRing { w: parent.width; h: parent.height; on: peek-card.f; radius: (18px * S.k); }
+                    // Over the ring: its halo fills its shape.
+                    Rectangle { border-radius: (18px * S.k); background: #141c33f0; border-width: 1px; border-color: Theme.line; }
+                    VerticalLayout {
+                        padding-left: (22px * S.k);
+                        padding-right: (22px * S.k);
+                        padding-top: (18px * S.k);
+                        spacing: (4px * S.k);
+                        alignment: start;
+                        Text { text: p.key; font-size: (19px * S.k); font-weight: 600; color: Theme.text; overflow: elide; }
+                        Text { text: p.value; font-size: (16px * S.k); color: Theme.text2; overflow: elide; }
+                    }
+                    TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.home-peek, i); } }
+                }
             }
         }
 
@@ -899,7 +929,7 @@ export component AppWindow inherits Window {
                 height: (104px * S.k);
                 spacing: (44px * S.k);
                 alignment: start;
-                for tab[i] in ["Home", "Library"]: Rectangle {
+                for tab[i] in ["Games", "Library"]: Rectangle {
                     width: tt.preferred-width + (8px * S.k);
                     property <bool> active: root.view == i;
                     property <bool> f: root.zone == Zone.tabs && root.idx == i && root.overlay == 0;
@@ -1134,7 +1164,7 @@ export component AppWindow inherits Window {
         // sits on top of Library titles or panels.
         if root.status != "" && root.view == 0 && root.overlay == 0: Rectangle {
             x: (76px * S.k);
-            y: root.height - self.height - (30px * S.k);
+            y: root.height - self.height - (30px * S.k) - (root.home-peek.length > 0 ? (96px * S.k) : 0);
             width: status-row.preferred-width;
             height: (50px * S.k);
             border-radius: (25px * S.k);
@@ -1157,7 +1187,8 @@ export component AppWindow inherits Window {
         }
         Rectangle {
             x: root.width - self.width - (76px * S.k);
-            y: root.height - self.height - (30px * S.k);
+            // Over the Game Hub's cards on Home.
+            y: root.height - self.height - (30px * S.k) - (root.view == 0 && root.overlay == 0 && root.home-peek.length > 0 ? (96px * S.k) : 0);
             width: hints.preferred-width;
             height: (50px * S.k);
             border-radius: (25px * S.k);
@@ -1179,8 +1210,8 @@ export component AppWindow inherits Window {
                     ? (root.pad-hints ? [{k: "✕", l: "Select", c: #8fb6ff, r: true}] : [{k: "Enter", l: "Select", c: #ffffff, r: false}])
                     : root.overlay == 0
                     ? (root.pad-hints
-                        ? [{k: "✕", l: "Select", c: #8fb6ff, r: true}, {k: "□", l: "Trailer", c: #f5a3e6, r: true}, {k: "△", l: "Search", c: #6ee7c8, r: true}, {k: "☰", l: "Options", c: #ffffff, r: false}]
-                        : [{k: "Enter", l: "Select", c: #ffffff, r: false}, {k: "T", l: "Trailer", c: #ffffff, r: false}, {k: "/", l: "Search", c: #ffffff, r: false}, {k: "O", l: "Options", c: #ffffff, r: false}])
+                        ? [{k: "✕", l: "Select", c: #8fb6ff, r: true}, {k: "□", l: "Trailer", c: #f5a3e6, r: true}, {k: "△", l: "Search", c: #6ee7c8, r: true}, {k: "☰", l: "Options", c: #ffffff, r: false}, {k: "Guide", l: "Control Center", c: #ffffff, r: false}]
+                        : [{k: "Enter", l: "Select", c: #ffffff, r: false}, {k: "T", l: "Trailer", c: #ffffff, r: false}, {k: "/", l: "Search", c: #ffffff, r: false}, {k: "O", l: "Options", c: #ffffff, r: false}, {k: "F1", l: "Control Center", c: #ffffff, r: false}])
                     : root.overlay == 1
                     ? (root.pad-hints
                         ? [{k: "✕", l: "Select", c: #8fb6ff, r: true}, {k: "○", l: "Back", c: #ff8f9c, r: true}, {k: "□", l: "Trailer", c: #f5a3e6, r: true}, {k: "☰", l: "Options", c: #ffffff, r: false}]

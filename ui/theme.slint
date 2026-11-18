@@ -65,6 +65,7 @@ export global Icons {
     out property <image> log: @image-url("../assets/icons/log.svg");
     out property <image> alert: @image-url("../assets/icons/alert.svg");
     out property <image> app: @image-url("../assets/icons/app-icon.svg");
+    out property <image> more: @image-url("../assets/icons/more.svg");
     out property <image> spinner: @image-url("../assets/icons/spinner.svg");
     out property <image> wifi: @image-url("../assets/icons/wifi.svg");
     out property <image> lock: @image-url("../assets/icons/lock.svg");
@@ -90,7 +91,7 @@ export global Icons {
             : name == "check" ? check : name == "folder" ? folder : name == "log" ? log
             : name == "lock" ? lock : name == "shift" ? shift : name == "eye" ? eye : name == "eye-off" ? eye-off
             : name == "pause" ? pause : name == "close" ? close : name == "trash" ? trash : name == "retry" ? retry
-            : name == "unshare" ? unshare : name == "share" ? share : none;
+            : name == "unshare" ? unshare : name == "share" ? share : name == "more" ? more : none;
     }
 }
 
@@ -124,6 +125,7 @@ export global Zone {
     out property <int> setup: 25;
     out property <int> settings-nav: 26;
     out property <int> control-center: 27;
+    out property <int> home-peek: 28;
 }
 
 // dot: KytyPS5 compatibility level (0 none, 1 in-game, 2 menus, 3 boots, 4 doesn't boot, 5 untested)
