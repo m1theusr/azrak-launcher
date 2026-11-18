@@ -109,6 +109,10 @@ Wayland variables, or winit opens the window on the user's real desktop instead 
 distrobox enter azrak-dev -- env -u WAYLAND_DISPLAY python3 ~/Projects/azrak-launcher/scripts/ui_matrix.py 1920x1080
 ```
 
+Never start the launcher for a test through `distrobox enter … bash -l…`: the login shell sets
+`WAYLAND_DISPLAY=wayland-0` again and the window opens on the user's real desktop. In a shell, run
+`unset WAYLAND_DISPLAY XDG_SESSION_TYPE` first. The window's class/app id is `swarmplay` (main.rs).
+
 Box packages it needs (once): `xvfb xfwm4 xdotool imagemagick libgl1-mesa-dri libegl1 libxkbcommon-x11-0
 libxcursor1 libxrandr2 libxi6 libx11-xcb1`. Take a "before" set on `main`, an "after" set on the branch,
 compare the PNGs (Read them), and say in the PR what changed on screen.

@@ -130,8 +130,14 @@ fn main() {
     if std::env::var_os("SLINT_BACKEND").is_none() {
         std::env::set_var("SLINT_BACKEND", "winit-femtovg");
     }
-
     let ui = AppWindow::new().expect("could not create the window (is a graphical session running?)");
+    // The window's app id (Wayland) and class (X11): the desktop matches it to swarmplay.desktop
+    // for the icon and name in the dock; scripts find the window by it. Without it there is none.
+    // After AppWindow::new (the platform exists then) and before the window is shown (it's read
+    // when the window is made).
+    if let Err(e) = slint::set_xdg_app_id(crate::update::ICON_NAME) {
+        eprintln!("could not set the app id: {e}");
+    }
     ui.set_app_version(env!("CARGO_PKG_VERSION").into());
     app::run(ui, mons, target, windowed);
 }
