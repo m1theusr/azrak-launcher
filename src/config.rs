@@ -37,6 +37,10 @@ pub struct Config {
     /// Library searches that found something, newest first (shown before typing on the
     /// on-screen keyboard).
     pub recent_searches: Vec<String>,
+    /// The Library's sort (an index into app::SORTS) and status filter ("All", "Installed",
+    /// "Playable"), as last chosen.
+    pub library_sort: usize,
+    pub library_status: String,
 }
 
 impl Default for Config {
@@ -63,6 +67,8 @@ impl Default for Config {
             vpn_only: false,
             vpn_interface: String::new(),
             recent_searches: Vec::new(),
+            library_sort: 0,
+            library_status: "All".into(),
         }
     }
 }
@@ -159,6 +165,17 @@ mod tests {
         assert!(!opted_out.seed_after_download);
         let restored: Config = serde_json::from_slice(&serde_json::to_vec(&opted_out).unwrap()).unwrap();
         assert!(!restored.seed_after_download);
+    }
+
+    #[test]
+    fn the_library_view_starts_as_before_and_is_kept_once_chosen() {
+        let old: Config = serde_json::from_str(r#"{"sounds":false}"#).unwrap();
+        assert_eq!((old.library_sort, old.library_status.as_str()), (0, "All"));
+        let mut chosen = old;
+        chosen.library_sort = 7;
+        chosen.library_status = "Playable".into();
+        let restored: Config = serde_json::from_slice(&serde_json::to_vec(&chosen).unwrap()).unwrap();
+        assert_eq!((restored.library_sort, restored.library_status.as_str()), (7, "Playable"));
     }
 }
 
