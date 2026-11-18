@@ -93,6 +93,21 @@ Publishing is outward-facing: ask the user first.
 3. `existing_pc_game()` in `src/library.rs`: PC games installed some other way (a top-level `start`/`start.sh`/… script)
    show in the Library without writing a manifest into their folder.
 
+## Screenshots (required for UI changes)
+
+Never call a UI change done without looking at it. `scripts/ui_matrix.py` runs the real launcher on a
+hidden X display with a throwaway home seeded from `~/.cache/azrak` and shoots 12 screens to
+`dist/ui-matrix/<size>/`. Run it in the box, built first (`cargo build --release`), WITHOUT the host's
+Wayland variables, or winit opens the window on the user's real desktop instead of Xvfb:
+
+```bash
+distrobox enter azrak-dev -- env -u WAYLAND_DISPLAY python3 ~/Projects/azrak-launcher/scripts/ui_matrix.py 1920x1080
+```
+
+Box packages it needs (once): `xvfb xfwm4 xdotool imagemagick libgl1-mesa-dri libegl1 libxkbcommon-x11-0
+libxcursor1 libxrandr2 libxi6 libx11-xcb1`. Take a "before" set on `main`, an "after" set on the branch,
+compare the PNGs (Read them), and say in the PR what changed on screen.
+
 ## Style
 
 Match the surrounding code: dense one-line `ensure!`/`match` arms, comments that say why in plain words,

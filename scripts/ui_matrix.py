@@ -81,8 +81,19 @@ def shoot(size: str, n: int, out: Path, binary: Path, game: Path | None):
     d = out / size
     d.mkdir(parents=True, exist_ok=True)
     try:
-        time.sleep(3.5)
-        win = run(["xdotool", "search", "--pid", str(app.pid)], env=env, capture_output=True, text=True).stdout.split()[-1]
+        # Its window by process, else by class (some X setups leave _NET_WM_PID unset); a start
+        # with a big seeded cache can take several seconds.
+        ids = []
+        for _ in range(30):
+            ids = (run(["xdotool", "search", "--pid", str(app.pid)], env=env, capture_output=True, text=True).stdout.split()
+                   or run(["xdotool", "search", "--class", "azrak"], env=env, capture_output=True, text=True).stdout.split())
+            if ids or app.poll() is not None:
+                break
+            time.sleep(1)
+        if not ids:
+            raise SystemExit(f"the launcher showed no window (exit code {app.poll()})")
+        time.sleep(2)
+        win = ids[-1]
         for name, keys in STEPS:
             for k in keys:
                 if k.startswith("sleep:"):
