@@ -1046,6 +1046,7 @@ impl Worker {
             let peers = self.peers.get(key).cloned().unwrap_or_else(|| self.policy.initial_peers.clone());
             let response = session.add_torrent(AddTorrent::from_bytes(bytes), Some(AddTorrentOptions {
                 paused: false, overwrite: true, output_folder: Some(folder.to_string_lossy().into_owned()),
+                storage_factory: Some(KeepTimes::new(&folder)),
                 trackers: Some(magnet.trackers), initial_peers: Some(peers), only_files: wanted.clone(), ..Default::default()
             })).await?;
             let handle = response.into_handle().context("No transfer handle")?;
@@ -1162,6 +1163,7 @@ impl Worker {
         // Only the files that were downloaded: sharing must never fetch the ones left out.
         let response = session.add_torrent(AddTorrent::from_bytes(bytes), Some(AddTorrentOptions {
             paused: true, overwrite: true, output_folder: Some(folder.to_string_lossy().into_owned()),
+            storage_factory: Some(KeepTimes::new(&folder)),
             trackers: Some(magnet.trackers), initial_peers: Some(peers), only_files: job.selected.clone(), ..Default::default()
         })).await?;
         let handle = response.into_handle().context("No transfer handle")?;
@@ -1452,6 +1454,58 @@ impl Worker {
     }
 }
 
+/// The engine's file storage, except that a file already as long as the torrent says is left
+/// alone when a transfer starts. librqbit sets every file's length on each start, even when it's
+/// right, and on Linux that alone gives the file a new modification time; the installer reads a
+/// new time as a changed file ("Source changed after inspection"), so a download being shared
+/// couldn't be installed for a while after every start of the launcher.
+#[derive(Clone)]
+struct KeepTimes { folder: PathBuf }
+
+impl KeepTimes {
+    fn new(folder: &Path) -> librqbit::storage::BoxStorageFactory {
+        use librqbit::storage::StorageFactoryExt;
+        Self { folder: folder.to_path_buf() }.boxed()
+    }
+}
+
+impl librqbit::storage::StorageFactory for KeepTimes {
+    type Storage = KeepTimesStorage;
+    fn create(&self, shared: &librqbit::ManagedTorrentShared, metadata: &librqbit::TorrentMetadata) -> Result<KeepTimesStorage> {
+        let inner = librqbit::storage::filesystem::FilesystemStorageFactory::default().create(shared, metadata)?;
+        let paths = metadata.file_infos.iter().map(|f| self.folder.join(&f.relative_filename)).collect();
+        Ok(KeepTimesStorage { inner: Box::new(inner), paths })
+    }
+    fn clone_box(&self) -> librqbit::storage::BoxStorageFactory {
+        use librqbit::storage::StorageFactoryExt;
+        self.clone().boxed()
+    }
+}
+
+struct KeepTimesStorage { inner: Box<dyn librqbit::storage::TorrentStorage>, paths: Vec<PathBuf> }
+
+impl librqbit::storage::TorrentStorage for KeepTimesStorage {
+    fn init(&mut self, shared: &librqbit::ManagedTorrentShared, metadata: &librqbit::TorrentMetadata) -> Result<()> {
+        self.inner.init(shared, metadata)
+    }
+    fn pread_exact(&self, file_id: usize, offset: u64, buf: &mut [u8]) -> Result<()> { self.inner.pread_exact(file_id, offset, buf) }
+    fn pwrite_all(&self, file_id: usize, offset: u64, buf: &[u8]) -> Result<()> { self.inner.pwrite_all(file_id, offset, buf) }
+    fn pwrite_all_vectored(&self, file_id: usize, offset: u64, bufs: [std::io::IoSlice<'_>; 2]) -> Result<usize> {
+        self.inner.pwrite_all_vectored(file_id, offset, bufs)
+    }
+    fn remove_file(&self, file_id: usize, filename: &Path) -> Result<()> { self.inner.remove_file(file_id, filename) }
+    fn remove_directory_if_empty(&self, path: &Path) -> Result<()> { self.inner.remove_directory_if_empty(path) }
+    fn ensure_file_length(&self, file_id: usize, length: u64) -> Result<()> {
+        // Its own file (not a link to one) of the right length: nothing to do.
+        let right = self.paths.get(file_id).and_then(|p| std::fs::symlink_metadata(p).ok()).is_some_and(|m| m.is_file() && m.len() == length);
+        if right { return Ok(()); }
+        self.inner.ensure_file_length(file_id, length)
+    }
+    fn take(&self) -> Result<Box<dyn librqbit::storage::TorrentStorage>> {
+        Ok(Box::new(Self { inner: self.inner.take()?, paths: self.paths.clone() }))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1673,6 +1727,28 @@ mod tests {
             tokio::task::spawn_blocking(move || manager.shutdown()).await.unwrap();
             assert_eq!(source_handle.stats().uploaded_bytes, source_uploaded, "seeding again never downloads");
             assert_eq!(std::fs::read(job.folder.join("public-domain-fixture.bin")).unwrap(), expected);
+        });
+    }
+
+    #[test]
+    fn sharing_again_after_a_restart_leaves_the_files_times_alone() {
+        // The installer reads a new modification time as a changed download.
+        runtime().block_on(async {
+            let temp = tempfile::tempdir().unwrap();
+            let (mut worker, source, _source_handle, expected, key) = completed_worker(temp.path(), true).await;
+            let file = worker.job(&key).unwrap().folder.join("public-domain-fixture.bin");
+            source.stop().await;
+            worker.shutdown().await;
+            let before = std::fs::metadata(&file).unwrap();
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            let manager = Manager::new(worker.store.clone(), worker.policy.clone());
+            wait_job(&manager, &key, |job| job.seeding).await;
+            let after = std::fs::metadata(&file).unwrap();
+            assert_eq!((after.mtime(), after.mtime_nsec(), after.ctime(), after.ctime_nsec()),
+                (before.mtime(), before.mtime_nsec(), before.ctime(), before.ctime_nsec()));
+            let mut manager = manager;
+            tokio::task::spawn_blocking(move || manager.shutdown()).await.unwrap();
+            assert_eq!(std::fs::read(&file).unwrap(), expected);
         });
     }
 
