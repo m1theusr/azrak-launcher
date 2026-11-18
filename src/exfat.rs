@@ -2,9 +2,21 @@
 //! enough of Microsoft's published exFAT layout to list files and stream their contents. Every
 //! offset, cluster number, chain and name is checked, so a damaged or hostile image fails with an
 //! error instead of reading outside the image or naming a path outside the installer's stage.
+//! The image is read from a file, or from inside a PlayStation PFS image (`pfs.rs`).
 
 use anyhow::{ensure, Context, Result};
 use std::{fs::File, os::unix::fs::FileExt};
+
+/// Bytes an exFAT image is read from: a file, or an image nested in another one.
+pub trait Image: std::fmt::Debug {
+    fn read_image_at(&self, buf: &mut [u8], offset: u64) -> std::io::Result<()>;
+    fn len(&self) -> std::io::Result<u64>;
+}
+
+impl Image for File {
+    fn read_image_at(&self, buf: &mut [u8], offset: u64) -> std::io::Result<()> { self.read_exact_at(buf, offset) }
+    fn len(&self) -> std::io::Result<u64> { Ok(self.metadata()?.len()) }
+}
 
 const SIGNATURE: &[u8] = b"EXFAT   ";
 /// Cluster numbers at or above this end a chain; one below marks a bad cluster.
@@ -16,9 +28,9 @@ const MAX_DEPTH: usize = 128;
 const CHUNK: usize = 1024 * 1024;
 
 /// Whether a file starts with an exFAT boot sector.
-pub fn is_image(file: &File) -> bool {
+pub fn is_image(file: &dyn Image) -> bool {
     let mut b = [0u8; 11];
-    file.read_exact_at(&mut b, 0).is_ok() && &b[3..11] == SIGNATURE
+    file.read_image_at(&mut b, 0).is_ok() && &b[3..11] == SIGNATURE
 }
 
 /// A file or folder inside the image. `path` uses `/` and is relative to the image root.
@@ -34,7 +46,7 @@ pub struct Node {
 
 #[derive(Debug)]
 pub struct Volume {
-    file: File,
+    file: Box<dyn Image>,
     cluster: u64,
     fat: u64,
     heap: u64,
@@ -43,9 +55,11 @@ pub struct Volume {
 }
 
 impl Volume {
-    pub fn open(file: File) -> Result<Self> {
+    pub fn open(file: File) -> Result<Self> { Self::open_image(Box::new(file)) }
+
+    pub fn open_image(file: Box<dyn Image>) -> Result<Self> {
         let mut b = [0u8; 512];
-        file.read_exact_at(&mut b, 0).context("Read exFAT boot sector")?;
+        file.read_image_at(&mut b, 0).context("Read exFAT boot sector")?;
         ensure!(&b[3..11] == SIGNATURE && b[510] == 0x55 && b[511] == 0xAA, "Not an exFAT image");
         let u32_at = |o: usize| u32::from_le_bytes(b[o..o + 4].try_into().unwrap()) as u64;
         let (sector_shift, cluster_shift) = (b[108] as u32, b[109] as u32);
@@ -53,7 +67,7 @@ impl Volume {
         let sector = 1u64 << sector_shift;
         let cluster = 1u64 << (sector_shift + cluster_shift);
         let (fat, fat_len, heap, count, root) = (u32_at(80) * sector, u32_at(84) * sector, u32_at(88) * sector, u32_at(92), u32_at(96));
-        let len = file.metadata()?.len();
+        let len = file.len()?;
         ensure!(count >= 1 && fat_len >= (count + 2) * 4 && fat + fat_len <= len, "Invalid exFAT allocation table");
         ensure!(heap.checked_add(count * cluster).is_some_and(|end| end <= len),
             "The exFAT image is shorter than its header says; wait until the download is complete");
@@ -68,7 +82,7 @@ impl Volume {
 
     fn next(&self, c: u32) -> Result<u32> {
         let mut b = [0u8; 4];
-        self.file.read_exact_at(&mut b, self.fat + c as u64 * 4).context("Read exFAT allocation table")?;
+        self.file.read_image_at(&mut b, self.fat + c as u64 * 4).context("Read exFAT allocation table")?;
         Ok(u32::from_le_bytes(b))
     }
 
@@ -108,7 +122,7 @@ impl Volume {
             let mut left = (n * self.cluster).min(len);
             while left > 0 {
                 let take = left.min(CHUNK as u64) as usize;
-                self.file.read_exact_at(&mut buf[..take], offset).context("Read exFAT image")?;
+                self.file.read_image_at(&mut buf[..take], offset).context("Read exFAT image")?;
                 sink(&buf[..take])?;
                 offset += take as u64;
                 left -= take as u64;

@@ -16,7 +16,7 @@ pub fn unsupported(platform: Platform, files: &[(String, u64)]) -> Option<String
     }).collect();
     match platform {
         Platform::Ps5 if names.iter().any(|(_, name, _)| name.ends_with(".pkg")) && !names.iter().any(|(_, name, _)| name == "eboot.bin") =>
-            Some("it's a PS5 PKG package; PS5 games install from extracted folders, archives and exFAT images".into()),
+            Some("it's a PS5 PKG package; PS5 games install from extracted folders, archives and exFAT or PFS (.ffpfsc) images".into()),
         Platform::Pc => pc(&names),
         _ => None,
     }
