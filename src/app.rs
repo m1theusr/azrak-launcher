@@ -835,10 +835,24 @@ impl App {
     }
 }
 
+/// The top bar's avatar: the first letter of who's signed in (their real name when the system
+/// has one, else the login).
+fn user_initial() -> String {
+    let gecos = std::fs::read_to_string("/etc/passwd").ok().and_then(|passwd| {
+        let uid = unsafe { libc::getuid() }.to_string();
+        passwd.lines().map(|l| l.split(':').collect::<Vec<_>>())
+            .find(|f| f.len() > 4 && f[2] == uid)
+            .map(|f| f[4].split(',').next().unwrap_or_default().trim().to_string())
+    });
+    let name = gecos.filter(|n| !n.is_empty()).or_else(|| std::env::var("USER").ok()).unwrap_or_default();
+    name.chars().find(|c| c.is_alphanumeric()).map(|c| c.to_uppercase().collect()).unwrap_or_else(|| "?".into())
+}
+
 fn wire_callbacks(ui: &AppWindow) {
     ui.on_key(|text, ctrl, alt, repeat| with_app_ret(|app| app.on_key(&text, ctrl, alt, repeat)));
     ui.on_click(|zone, idx| with_app(move |app| app.on_click(zone, idx)));
     ui.set_on_os(crate::os::system::on_os());
+    ui.set_user_initial(user_initial().into());
     ui.on_hover(|zone, idx| with_app(move |app| app.on_hover(zone, idx)));
     ui.on_row_wheel(|d| {
         with_app(move |app| {
@@ -1833,7 +1847,8 @@ impl App {
                 self.set_focus(self.zone, 0);
             }
             if self.zone == Z_TOP && self.live.is_empty() && self.idx < 2 {
-                self.set_focus(Z_TOP, 4);
+                let first = self.top_items()[0];
+                self.set_focus(Z_TOP, first);
             }
             self.build_row();
             self.push_row();
@@ -2217,8 +2232,14 @@ impl App {
     /// The top bar's buttons: 0–1 a running game's Resume and Stop, 3 Settings, 4 Downloads. (2 was
     /// a search button, which only led to the Library's own search: △ or / still gets there.)
     fn top_items(&self) -> Vec<i32> {
-        // Search, Downloads (the ring, or its icon), Settings, as the round buttons stand.
-        if self.live.is_empty() { vec![5, 4, 3] } else { vec![0, 1, 5, 4, 3] }
+        // As they stand, like a console's: the running game's Resume and Stop, Search, the
+        // Downloads ring (only while something's happening; otherwise Downloads is in the
+        // Control Center), Settings, then you.
+        let mut items = if self.live.is_empty() { vec![] } else { vec![0, 1] };
+        items.push(5);
+        if self.ui().get_ring_kind() > 0 { items.push(4); }
+        items.extend([3, 6]);
+        items
     }
 
     pub fn act(&mut self, a: Act) {
@@ -2309,6 +2330,7 @@ impl App {
                         // The ring's download (what stopped, or what's going) is the one shown.
                         4 => { let key = self.ring_key.clone(); self.open_downloads(key.as_deref()) }
                         5 => self.open_search(),
+                        6 => self.toggle_control_center(),
                         _ => self.open_settings(),
                     },
                     _ => {}
@@ -2619,7 +2641,7 @@ impl App {
                 self.scroll_hub();
             }
             (Z_HUB_DETAILS, Act::Down) => {
-                if shots > 0 { self.move_focus(Z_SHOTS, 0); self.prefetch_viewer(); } else { self.move_focus(Z_DESC, 0); }
+                self.move_focus(Z_DESC, 0);
                 self.scroll_hub();
             }
             (Z_HUB, Act::Confirm) => {
@@ -2636,25 +2658,21 @@ impl App {
                 self.scroll_shots();
             }
             (Z_SHOTS, Act::Up) => {
-                self.move_focus(Z_HUB_DETAILS, 0);
+                self.hub_step(-1);
                 self.scroll_hub();
             }
             (Z_SHOTS, Act::Down) => {
-                self.move_focus(Z_DESC, 0);
+                self.hub_step(1);
                 self.scroll_hub();
             }
             (Z_SHOTS, Act::Confirm) => self.open_viewer(self.idx as usize),
             (Z_DESC, Act::Up) => {
                 if self.idx > 0 {
                     self.idx -= 1;
-                    self.scroll_hub();
-                } else if shots > 0 {
-                    self.move_focus(Z_SHOTS, 0);
-                    self.scroll_hub();
                 } else {
                     self.move_focus(Z_HUB_DETAILS, 0);
-                    self.scroll_hub();
                 }
+                self.scroll_hub();
             }
             (Z_DESC, Act::Down | Act::PageDown) => {
                 self.idx += 1;
@@ -3243,16 +3261,17 @@ impl App {
         // It rises from under Home, as the page scrolling on (ui/app.slint).
         self.ui().set_hub_scrolled(true);
         match card {
-            1 => self.hub_step(1),
+            1 if self.hub_version_count() > 0 || self.hub.and_then(|t| t.game).is_some_and(|i| self.release_count(i) > 1) => self.hub_step(1),
             2 if !self.hub_shots.is_empty() => { self.set_focus(Z_SHOTS, 0); self.prefetch_viewer(); }
-            2 | 3 => {
+            1..=3 => {
                 self.set_focus(Z_HUB_DETAILS, 0);
                 // Opened, as pressing it in the Hub does (Down then reads on, as there).
                 if card == 3 { self.ui().set_hub_details_open(true); }
             }
             _ => return,
         }
-        self.scroll_hub();
+        // The page is laid out on the next frame: its sections say where they are then.
+        slint::Timer::single_shot(Duration::from_millis(80), || with_app(|app| app.scroll_hub()));
     }
 
     pub fn open_hub(&mut self, t: Target) {

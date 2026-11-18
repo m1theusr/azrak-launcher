@@ -222,7 +222,12 @@ export component AppWindow inherits Window {
         : 0;
     in property <bool> home-has-game: true;
     in-out property <length> hub-content-h;
-    out property <length> hub-text-w: min((1060px * S.k), root.width - (540px * S.k) - (96px * S.k));
+    out property <length> hub-text-w: min((1560px * S.k), root.width - (192px * S.k));
+    // Where the Hub's sections start in its page (they report it; Rust scrolls to them).
+    in-out property <length> hub-at-versions;
+    in-out property <length> hub-at-shots;
+    in-out property <length> hub-at-details;
+    in-out property <length> hub-at-about;
     in-out property <length> hub-col-h;
     out property <length> hub-view-h: root.height;
     in-out property <length> hub-y;
@@ -233,6 +238,8 @@ export component AppWindow inherits Window {
     // 5 ready (finished while Downloads was closed); its words,
     // its arc (SVG path on a 36×36 box), and the art behind the bar, blurred, for its glass.
     in property <int> ring-kind;
+    // The top bar's avatar: the first letter of who's signed in.
+    in property <string> user-initial: "?";
     in property <string> ring-label;
     in property <string> ring-suffix;
     in property <string> ring-sizer;
@@ -606,6 +613,13 @@ export component AppWindow inherits Window {
                     width: parent.cw;
                     height: parent.ch;
                     animate y { duration: 260ms; easing: ease-out-expo; }
+                    // They come in one after another when the Welcome is chosen.
+                    property <bool> shown: false;
+                    init => { self.shown = true; }
+                    opacity: self.shown ? 1 : 0;
+                    transform-scale: self.shown ? 1 : 0.94;
+                    animate opacity { duration: 360ms; delay: i * 45ms; easing: ease-out-quad; }
+                    animate transform-scale { duration: 480ms; delay: i * 45ms; easing: ease-out-expo; }
                     Rectangle {
                         border-radius: (22px * S.k);
                         background: widget.f ? #ffffff2b : #0a0f1d8c;
@@ -1099,23 +1113,24 @@ export component AppWindow inherits Window {
                         // Search (the Library's, from anywhere).
                         srch := Rectangle {
                             property <bool> f: root.zone == Zone.top && root.idx == 5 && root.overlay == 0;
-                            height: (60px * S.k);
-                            y: (2px * S.k);
+                            height: (56px * S.k);
+                            y: (4px * S.k);
                             width: self.height;
                             border-radius: self.height / 2;
-                            background: self.f ? #f5f7fb : ta-srch.has-hover ? #ffffff2e : #0a0f1d80;
-                            border-width: self.f ? 0 : 1px;
-                            border-color: #ffffff1f;
+                            // A plain icon; the one chosen sits in a white circle.
+                            background: self.f ? #f5f7fb : ta-srch.has-hover ? #ffffff1f : transparent;
                             animate background { duration: 120ms; }
-                            Image { source: Icons.search; colorize: srch.f ? #0a0d18 : Theme.text; width: (26px * S.k); height: self.width; }
+                            Image { source: Icons.search; colorize: srch.f ? #0a0d18 : Theme.text; width: (30px * S.k); height: self.width; }
                             ta-srch := TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.top, 5); } }
                         }
-                        dl := Rectangle {
+                        // Downloads: the ring, only while something's happening (the Control Center
+                        // has Downloads always).
+                        if root.ring-kind > 0: dl := Rectangle {
                             property <bool> f: root.zone == Zone.top && root.idx == 4 && root.overlay == 0;
-                            width: max((60px * S.k), dl-row.preferred-width);
+                            width: max((56px * S.k), dl-row.preferred-width);
                             border-radius: self.height / 2;
-                            height: (60px * S.k);
-                            y: (2px * S.k);
+                            height: (56px * S.k);
+                            y: (4px * S.k);
                             background: self.f ? #f5f7fb : ta-dl.has-hover ? #ffffff2e : #0a0f1d80;
                             border-width: self.f ? 0 : 1px;
                             border-color: #ffffff1f;
@@ -1176,13 +1191,11 @@ export component AppWindow inherits Window {
                             property <bool> f: root.zone == Zone.top && root.idx == 3 && root.overlay == 0;
                             width: self.height;
                             border-radius: self.height / 2;
-                            height: (60px * S.k);
-                            y: (2px * S.k);
-                            background: self.f ? #f5f7fb : ta-gear.has-hover ? #ffffff2e : #0a0f1d80;
-                            border-width: self.f ? 0 : 1px;
-                            border-color: #ffffff1f;
+                            height: (56px * S.k);
+                            y: (4px * S.k);
+                            background: self.f ? #f5f7fb : ta-gear.has-hover ? #ffffff1f : transparent;
                             animate background { duration: 120ms; }
-                            Image { source: Icons.gear; colorize: gear.f ? #0a0d18 : Theme.text2; width: (28px * S.k); height: self.width; }
+                            Image { source: Icons.gear; colorize: gear.f ? #0a0d18 : Theme.text; width: (30px * S.k); height: self.width; }
                             // On the gear's top right, ringed in the bar's colour so it stands off the teeth.
                             if root.settings-dot: Rectangle {
                                 x: parent.width / 2 + (7px * S.k); y: parent.height / 2 - (17px * S.k);
@@ -1190,9 +1203,25 @@ export component AppWindow inherits Window {
                                 border-radius: self.width / 2;
                                 background: Theme.warn;
                                 border-width: (2.5px * S.k);
-                                border-color: gear.f ? #f5f7fb : #0a0f1d;
+                                border-color: gear.f ? #f5f7fb : #00000066;
                             }
                             ta-gear := TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.top, 3); } }
+                        }
+                        // You: an avatar with your initial; it opens the Control Center (Power is there).
+                        av := Rectangle {
+                            property <bool> f: root.zone == Zone.top && root.idx == 6 && root.overlay == 0;
+                            width: (56px * S.k);
+                            height: self.width;
+                            y: (4px * S.k);
+                            FocusRing { w: parent.width; h: parent.height; on: av.f; radius: parent.width / 2; glow: false; }
+                            Rectangle {
+                                border-radius: self.width / 2;
+                                background: @linear-gradient(135deg, #4d9bff 0%, #0a3fb8 100%);
+                                border-width: ta-av.has-hover && !av.f ? (2px * S.k) : 0;
+                                border-color: #ffffffb3;
+                                Text { text: root.user-initial; font-size: (26px * S.k); font-weight: 600; color: #ffffff; }
+                            }
+                            ta-av := TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.top, 6); } }
                         }
                         HorizontalLayout {
                             padding-left: (10px * S.k);
@@ -1346,33 +1375,10 @@ export component AppWindow inherits Window {
                 height: root.height;
                 image-fit: cover;
             }
-            // Dark enough behind the text column for long descriptions over busy art.
-            Rectangle { background: @linear-gradient(90deg, #04060ef7 0%, #04060ee8 50%, #04060ea6 72%, #04060e40 100%); }
-            Rectangle { background: @linear-gradient(0deg, #04060ee6 0%, #04060e00 50%); }
+            // The game's page, as a console's: its art behind, dimmed enough for text across the width.
+            Rectangle { background: @linear-gradient(90deg, #04060ef2 0%, #04060ed9 45%, #04060ea6 75%, #04060e73 100%); }
+            Rectangle { background: @linear-gradient(0deg, #04060ef0 0%, #04060e00 60%); }
 
-            Rectangle {
-                x: (96px * S.k);
-                y: (130px * S.k);
-                width: (380px * S.k);
-                height: (570px * S.k);   // 2:3, like the official covers
-                border-radius: (20px * S.k);
-                clip: true;
-                background: Theme.panel;
-                drop-shadow-blur: 0;
-                Cover { source: root.hub.cover; loaded: root.hub.cover-loaded; }
-                // No artwork: the console's colours, as on the Library card (the name is beside it).
-                if root.hub.no-art: Rectangle {
-                    background: root.hub.console == "PC" ? @linear-gradient(160deg, #1d3a2f 0%, #0d1714 100%)
-                        : root.hub.console == "PS4" ? @linear-gradient(160deg, #1b2d52 0%, #0b1224 100%)
-                        : @linear-gradient(160deg, #26304f 0%, #0e1222 100%);
-                    Text {
-                        text: root.hub.console;
-                        font-size: (64px * S.k);
-                        font-weight: 800;
-                        color: #ffffff2e;
-                    }
-                }
-            }
             // Scroll areas crop their content, so they start `gutter` before the content: a selected
             // button's grow + glow must never be cut off at the edge.
             hub-flick := Flickable {
@@ -1381,15 +1387,15 @@ export component AppWindow inherits Window {
                 changed content-height => { root.hub-content-h = self.content-height; }
                 changed col-h => { root.hub-col-h = self.col-h; }
                 property <length> gutter: (40px * S.k);
-                x: (540px * S.k) - self.gutter;
-                width: root.width - (540px * S.k) - (60px * S.k) + self.gutter;
+                x: (96px * S.k) - self.gutter;
+                width: root.width - (96px * S.k) - (60px * S.k) + self.gutter;
                 height: root.height;
                 content-y <=> root.hub-y;
                 content-height: hub-col.preferred-height + (200px * S.k);
                 hub-col := VerticalLayout {
                     x: parent.gutter;
                     y: 0;
-                    width: min((1060px * S.k), root.width - (540px * S.k) - (96px * S.k));
+                    width: root.hub-text-w;
                     height: self.preferred-height;
                     padding-top: (130px * S.k);
                     spacing: 0;
@@ -1421,32 +1427,6 @@ export component AppWindow inherits Window {
                         for c in root.hub.chips: Chip { data: c; }
                     }
                     Rectangle { height: (26px * S.k); }
-                    // Will it play here? One headline in the player's words, coloured honestly,
-                    // with the results behind it in smaller text.
-                    if root.hub.verdict != "": HorizontalLayout {
-                        spacing: (14px * S.k);
-                        alignment: start;
-                        VerticalLayout {
-                            alignment: start;
-                            padding-top: (11px * S.k);
-                            Rectangle {
-                                width: (14px * S.k); height: (14px * S.k); border-radius: (7px * S.k);
-                                background: root.hub.verdict-kind == 1 ? Theme.ok : root.hub.verdict-kind == 2 ? Theme.warn : root.hub.verdict-kind == 3 ? Theme.danger : Theme.text3;
-                            }
-                        }
-                        VerticalLayout {
-                            spacing: (4px * S.k);
-                            Text {
-                                text: root.hub.verdict; font-size: (28px * S.k); font-weight: 600;
-                                color: root.hub.verdict-kind == 1 ? Theme.ok : root.hub.verdict-kind == 2 ? Theme.warn : root.hub.verdict-kind == 3 ? Theme.danger : Theme.text;
-                            }
-                            if root.hub.verdict-detail != "": Text {
-                                width: root.hub-text-w - (28px * S.k);
-                                text: root.hub.verdict-detail; font-size: (17px * S.k); color: Theme.text3; wrap: word-wrap;
-                            }
-                        }
-                    }
-                    if root.hub.verdict != "": Rectangle { height: (24px * S.k); }
                     HorizontalLayout {
                         spacing: (16px * S.k);
                         alignment: start;
@@ -1468,194 +1448,270 @@ export component AppWindow inherits Window {
                         Text { text: root.hub.download-note; width: min((980px * S.k), root.hub-text-w - (40px * S.k)); wrap: word-wrap; max-height: (52px * S.k); overflow: elide; font-size: (19px * S.k); color: root.hub.download-note-warn ? Theme.warn : Theme.text2; }
                     }
                     Rectangle { height: (22px * S.k); }
-                    // The game on each platform: how it should play here, how easy it is to get,
-                    // and which to pick. Choosing one shows the game there.
-                    if root.hub.versions.length > 0: VerticalLayout {
-                        spacing: (12px * S.k);
-                        padding-bottom: (18px * S.k);
-                        Text { text: "PLAY IT ON"; font-size: (15px * S.k); font-weight: 700; letter-spacing: (1.4px * S.k); color: Theme.text3; }
-                        HorizontalLayout {
-                            spacing: (14px * S.k);
-                            for v[i] in root.hub.versions: Rectangle {
-                                property <bool> f: root.zone == Zone.versions && root.idx == i && root.overlay == 1;
-                                horizontal-stretch: 1;
-                                height: (116px * S.k);
-                                border-radius: (16px * S.k);
-                                background: v.current ? #ffffff1c : #ffffff0d;
-                                border-width: f ? (3px * S.k) : v.current ? (2px * S.k) : 1px;
-                                border-color: f ? Theme.text : v.current ? Theme.accent : Theme.line;
-                                animate background, border-color { duration: 140ms; }
-                                VerticalLayout {
-                                    padding: (16px * S.k);
-                                    spacing: (5px * S.k);
-                                    HorizontalLayout {
-                                        spacing: (10px * S.k);
-                                        Text {
-                                            text: v.platform;
-                                            font-size: (22px * S.k);
-                                            font-weight: 800;
-                                            letter-spacing: (0.5px * S.k);
-                                            color: v.platform == "PS4" ? #b8d8ff : v.platform == "PC" ? #a8f0cc : #ffffff;
-                                            vertical-alignment: center;
-                                        }
-                                        if v.best: Rectangle {
-                                            width: best-text.preferred-width + (18px * S.k);
-                                            height: (26px * S.k);
-                                            y: (parent.height - self.height) / 2;
-                                            border-radius: (13px * S.k);
-                                            background: Theme.ok.with-alpha(0.18);
-                                            border-width: 1px;
-                                            border-color: Theme.ok.with-alpha(0.45);
-                                            best-text := Text { text: "Best for this PC"; font-size: (14px * S.k); font-weight: 700; color: Theme.ok; }
-                                        }
-                                        Rectangle { horizontal-stretch: 1; }
-                                        if v.current: Text { text: "Showing"; font-size: (14px * S.k); font-weight: 600; color: Theme.text3; vertical-alignment: center; }
-                                    }
-                                    Text {
-                                        text: v.verdict;
-                                        font-size: (18px * S.k);
-                                        font-weight: 600;
-                                        color: v.verdict-kind == 1 ? Theme.ok : v.verdict-kind == 2 ? Theme.warn : v.verdict-kind == 3 ? Theme.danger : Theme.text2;
-                                        overflow: elide;
-                                    }
-                                    Text { text: v.detail; font-size: (16px * S.k); color: Theme.text3; overflow: elide; }
-                                }
-                                TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.versions, i); } }
-                            }
-                        }
-                        Text { text: "Each version has its own saves and updates."; font-size: (15px * S.k); color: Theme.text3; }
-                    }
-                    // Other releases of this version (editions, regions, updates): big arrows, plain words.
-                    if root.hub.release-count > 1: Rectangle {
-                        height: (72px * S.k); border-radius: (14px * S.k); background: #ffffff0d;
-                        border-width: root.zone == Zone.releases ? (3px * S.k) : 1px;
-                        border-color: root.zone == Zone.releases ? Theme.text : Theme.line;
-                        HorizontalLayout {
-                            spacing: (16px * S.k); padding-left: (10px * S.k); padding-right: (10px * S.k);
-                            Rectangle {
-                                width: (52px * S.k);
-                                Rectangle {
-                                    width: (52px * S.k); height: (52px * S.k); border-radius: (26px * S.k);
-                                    background: root.zone == Zone.releases ? #ffffff2e : #ffffff14;
-                                    Image { source: Icons.chevl; colorize: Theme.text; width: (30px * S.k); height: (30px * S.k); }
-                                }
-                                TouchArea { mouse-cursor: pointer; clicked => { root.hub-release(-1); } }
-                            }
-                            VerticalLayout {
-                                alignment: center; spacing: (2px * S.k); horizontal-stretch: 1;
-                                Text { text: root.hub.release-label; font-size: (20px * S.k); font-weight: 600; color: Theme.text; overflow: elide; }
-                                if root.hub.release-detail != "": Text { text: root.hub.release-detail; font-size: (16px * S.k); color: Theme.text3; overflow: elide; }
-                            }
-                            Text { text: "Choose another release"; font-size: (17px * S.k); color: root.zone == Zone.releases ? Theme.text : Theme.text2; vertical-alignment: center; }
-                            Rectangle {
-                                width: (52px * S.k);
-                                Rectangle {
-                                    width: (52px * S.k); height: (52px * S.k); border-radius: (26px * S.k);
-                                    background: root.zone == Zone.releases ? #ffffff2e : #ffffff14;
-                                    Image { source: Icons.chevr; colorize: Theme.text; width: (30px * S.k); height: (30px * S.k); }
-                                }
-                                TouchArea { mouse-cursor: pointer; clicked => { root.hub-release(1); } }
-                            }
-                        }
-                    }
-                    if root.hub.release-count > 1: Rectangle { height: (18px * S.k); }
-                    for fr in root.hub.facts: HorizontalLayout {
-                        spacing: (14px * S.k);
-                        padding-bottom: (14px * S.k);
-                        for f in fr.items: Rectangle {
-                            width: (min((1060px * S.k), root.width - (540px * S.k) - (96px * S.k)) - (28px * S.k)) / 3;
-                            height: (92px * S.k);
-                            border-radius: (16px * S.k);
-                            background: #0b1020b8;
+                    // Compatibility
+                    sec-compat := VerticalLayout {
+                        padding-top: root.hub.verdict != "" ? (56px * S.k) : 0;
+                        spacing: (18px * S.k);
+                        if root.hub.verdict != "": Text { text: "Compatibility"; font-size: (30px * S.k); font-weight: 600; color: Theme.text; }
+                        if root.hub.verdict != "": Rectangle {
+                            border-radius: (20px * S.k);
+                            background: #0a0f1d8c;
                             border-width: 1px;
-                            border-color: Theme.line;
+                            border-color: #ffffff1f;
                             VerticalLayout {
-                                padding-left: (22px * S.k);
-                                padding-right: (16px * S.k);
-                                alignment: center;
-                                spacing: (6px * S.k);
-                                Text { text: f.key; font-size: (15px * S.k); font-weight: 600; letter-spacing: (1.5px * S.k); color: Theme.text3; }
-                                Text { text: f.value; font-size: (21px * S.k); font-weight: 500; overflow: elide;
-                                    color: f.kind == 1 ? Theme.ok : f.kind == 2 ? Theme.warn : f.kind == 3 ? Theme.danger : f.kind == 4 ? Theme.text3 : Theme.text; }
-                            }
-                        }
-                    }
-                    Rectangle {
-                        height: (46px * S.k); border-radius: (10px * S.k);
-                        background: root.zone == Zone.hub-details ? #ffffff1f : #ffffff08;
-                        border-width: root.zone == Zone.hub-details ? (2px * S.k) : 1px;
-                        border-color: root.zone == Zone.hub-details ? Theme.text : Theme.line;
-                        Text { text: root.hub-details-open ? "−  Hide technical details" : "+  Technical details & installed game"; font-size: (18px * S.k); color: Theme.text2; }
-                        TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.hub-details, 0); } }
-                    }
-                    if root.hub-details-open: VerticalLayout {
-                        padding-top: (16px * S.k); spacing: (10px * S.k);
-                        for fr in root.hub.details: VerticalLayout {
-                            spacing: (10px * S.k);
-                            for f in fr.items: HorizontalLayout {
-                                spacing: (18px * S.k);
-                                Text { text: f.key; width: (280px * S.k); font-size: (17px * S.k); color: Theme.text3; }
-                                Text { text: f.value; font-size: (19px * S.k); color: Theme.text2; wrap: word-wrap; horizontal-stretch: 1; }
-                            }
-                        }
-                    }
-                    if root.hub.shots.length > 0: VerticalLayout {
-                        padding-top: (22px * S.k);
-                        spacing: (14px * S.k);
-                        Text { text: "SCREENSHOTS"; font-size: (18px * S.k); font-weight: 600; letter-spacing: (2px * S.k); color: Theme.text3; }
-                        Rectangle {
-                        height: (192px * S.k);
-                        Flickable {
-                            // Overhangs the column by a gutter on each side so rings/glows aren't cut.
-                            x: -(30px * S.k);
-                            width: parent.width + (60px * S.k);
-                            height: parent.height;
-                            interactive: false;
-                            content-x: root.shots-x;
-                            content-width: root.hub.shots.length * (314px * S.k) + (72px * S.k);
-                            for s[i] in root.hub.shots: Rectangle {
-                                x: (30px * S.k) + i * (314px * S.k);
-                                y: (12px * S.k);
-                                width: (300px * S.k);
-                                height: (169px * S.k);
-                                FocusRing { w: parent.width; h: parent.height; on: root.zone == Zone.shots && root.idx == i && root.overlay == 1; radius: (12px * S.k); }
-                                Rectangle {
-                                    border-radius: (12px * S.k);
-                                    clip: true;
-                                    background: Theme.panel;
-                                    Shimmer { active: !s.loaded; }
-                                    Image {
-                                        source: s.image;
-                                        width: parent.width;
-                                        height: parent.height;
-                                        image-fit: cover;
-                                        opacity: s.loaded ? 1 : 0;
-                                        animate opacity { duration: 250ms; }
+                                padding: (24px * S.k);
+                                // Will it play here? One headline in the player's words, coloured honestly,
+                                // with the results behind it in smaller text.
+                                HorizontalLayout {
+                                    spacing: (14px * S.k);
+                                    alignment: start;
+                                    VerticalLayout {
+                                        alignment: start;
+                                        padding-top: (11px * S.k);
+                                        Rectangle {
+                                            width: (14px * S.k); height: (14px * S.k); border-radius: (7px * S.k);
+                                            background: root.hub.verdict-kind == 1 ? Theme.ok : root.hub.verdict-kind == 2 ? Theme.warn : root.hub.verdict-kind == 3 ? Theme.danger : Theme.text3;
+                                        }
+                                    }
+                                    VerticalLayout {
+                                        spacing: (4px * S.k);
+                                        Text {
+                                            text: root.hub.verdict; font-size: (28px * S.k); font-weight: 600;
+                                            color: root.hub.verdict-kind == 1 ? Theme.ok : root.hub.verdict-kind == 2 ? Theme.warn : root.hub.verdict-kind == 3 ? Theme.danger : Theme.text;
+                                        }
+                                        if root.hub.verdict-detail != "": Text {
+                                            width: root.hub-text-w - (110px * S.k);
+                                            text: root.hub.verdict-detail; font-size: (17px * S.k); color: Theme.text3; wrap: word-wrap;
+                                        }
                                     }
                                 }
-                                TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.shots, i); } }
                             }
                         }
+                    }
+                    // Versions
+                    sec-versions := VerticalLayout {
+                        init => { root.hub-at-versions = self.y; }
+                        changed y => { root.hub-at-versions = self.y; }
+                        padding-top: (root.hub.versions.length > 0 || root.hub.release-count > 1) ? (56px * S.k) : 0;
+                        spacing: (18px * S.k);
+                        if (root.hub.versions.length > 0 || root.hub.release-count > 1): Text { text: "Versions"; font-size: (30px * S.k); font-weight: 600; color: Theme.text; }
+                        // The game on each platform: how it should play here, how easy it is to get,
+                        // and which to pick. Choosing one shows the game there.
+                        if root.hub.versions.length > 0: VerticalLayout {
+                            spacing: (12px * S.k);
+                            padding-bottom: (18px * S.k);
+                            HorizontalLayout {
+                                spacing: (14px * S.k);
+                                for v[i] in root.hub.versions: Rectangle {
+                                    property <bool> f: root.zone == Zone.versions && root.idx == i && root.overlay == 1;
+                                    horizontal-stretch: 1;
+                                    height: (116px * S.k);
+                                    border-radius: (16px * S.k);
+                                    background: v.current ? #ffffff1c : #ffffff0d;
+                                    border-width: f ? (3px * S.k) : v.current ? (2px * S.k) : 1px;
+                                    border-color: f ? Theme.text : v.current ? Theme.accent : Theme.line;
+                                    animate background, border-color { duration: 140ms; }
+                                    VerticalLayout {
+                                        padding: (16px * S.k);
+                                        spacing: (5px * S.k);
+                                        HorizontalLayout {
+                                            spacing: (10px * S.k);
+                                            Text {
+                                                text: v.platform;
+                                                font-size: (22px * S.k);
+                                                font-weight: 800;
+                                                letter-spacing: (0.5px * S.k);
+                                                color: v.platform == "PS4" ? #b8d8ff : v.platform == "PC" ? #a8f0cc : #ffffff;
+                                                vertical-alignment: center;
+                                            }
+                                            if v.best: Rectangle {
+                                                width: best-text.preferred-width + (18px * S.k);
+                                                height: (26px * S.k);
+                                                y: (parent.height - self.height) / 2;
+                                                border-radius: (13px * S.k);
+                                                background: Theme.ok.with-alpha(0.18);
+                                                border-width: 1px;
+                                                border-color: Theme.ok.with-alpha(0.45);
+                                                best-text := Text { text: "Best for this PC"; font-size: (14px * S.k); font-weight: 700; color: Theme.ok; }
+                                            }
+                                            Rectangle { horizontal-stretch: 1; }
+                                            if v.current: Text { text: "Showing"; font-size: (14px * S.k); font-weight: 600; color: Theme.text3; vertical-alignment: center; }
+                                        }
+                                        Text {
+                                            text: v.verdict;
+                                            font-size: (18px * S.k);
+                                            font-weight: 600;
+                                            color: v.verdict-kind == 1 ? Theme.ok : v.verdict-kind == 2 ? Theme.warn : v.verdict-kind == 3 ? Theme.danger : Theme.text2;
+                                            overflow: elide;
+                                        }
+                                        Text { text: v.detail; font-size: (16px * S.k); color: Theme.text3; overflow: elide; }
+                                    }
+                                    TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.versions, i); } }
+                                }
+                            }
+                            Text { text: "Each version has its own saves and updates."; font-size: (15px * S.k); color: Theme.text3; }
+                        }
+                        // Other releases of this version (editions, regions, updates): big arrows, plain words.
+                        if root.hub.release-count > 1: Rectangle {
+                            height: (72px * S.k); border-radius: (14px * S.k); background: #ffffff0d;
+                            border-width: root.zone == Zone.releases ? (3px * S.k) : 1px;
+                            border-color: root.zone == Zone.releases ? Theme.text : Theme.line;
+                            HorizontalLayout {
+                                spacing: (16px * S.k); padding-left: (10px * S.k); padding-right: (10px * S.k);
+                                Rectangle {
+                                    width: (52px * S.k);
+                                    Rectangle {
+                                        width: (52px * S.k); height: (52px * S.k); border-radius: (26px * S.k);
+                                        background: root.zone == Zone.releases ? #ffffff2e : #ffffff14;
+                                        Image { source: Icons.chevl; colorize: Theme.text; width: (30px * S.k); height: (30px * S.k); }
+                                    }
+                                    TouchArea { mouse-cursor: pointer; clicked => { root.hub-release(-1); } }
+                                }
+                                VerticalLayout {
+                                    alignment: center; spacing: (2px * S.k); horizontal-stretch: 1;
+                                    Text { text: root.hub.release-label; font-size: (20px * S.k); font-weight: 600; color: Theme.text; overflow: elide; }
+                                    if root.hub.release-detail != "": Text { text: root.hub.release-detail; font-size: (16px * S.k); color: Theme.text3; overflow: elide; }
+                                }
+                                Text { text: "Choose another release"; font-size: (17px * S.k); color: root.zone == Zone.releases ? Theme.text : Theme.text2; vertical-alignment: center; }
+                                Rectangle {
+                                    width: (52px * S.k);
+                                    Rectangle {
+                                        width: (52px * S.k); height: (52px * S.k); border-radius: (26px * S.k);
+                                        background: root.zone == Zone.releases ? #ffffff2e : #ffffff14;
+                                        Image { source: Icons.chevr; colorize: Theme.text; width: (30px * S.k); height: (30px * S.k); }
+                                    }
+                                    TouchArea { mouse-cursor: pointer; clicked => { root.hub-release(1); } }
+                                }
+                            }
                         }
                     }
-                    if root.hub.about.length > 0: VerticalLayout {
-                        padding-top: (30px * S.k);
-                        spacing: (16px * S.k);
-                        Text { text: "ABOUT"; font-size: (18px * S.k); font-weight: 600; letter-spacing: (2px * S.k); color: root.zone == Zone.desc ? Theme.text : Theme.text3; }
-                        for p in root.hub.about: Text {
-                            // Explicit width: wrapped text inside a nested block is otherwise measured
-                            // unwrapped (one line), which made the page too short to scroll to the end.
-                            width: root.hub-text-w;
-                            text: p;
-                            font-size: (21px * S.k);
-                            color: Theme.text2;
-                            wrap: word-wrap;
+                    // Trailers & screenshots
+                    sec-shots := VerticalLayout {
+                        init => { root.hub-at-shots = self.y; }
+                        changed y => { root.hub-at-shots = self.y; }
+                        padding-top: root.hub.shots.length > 0 ? (56px * S.k) : 0;
+                        spacing: (18px * S.k);
+                        if root.hub.shots.length > 0: Text { text: "Trailers & screenshots"; font-size: (30px * S.k); font-weight: 600; color: Theme.text; }
+                        if root.hub.shots.length > 0: VerticalLayout {
+                            padding-top: 0;
+                            spacing: (14px * S.k);
+                            Rectangle {
+                            height: (262px * S.k);
+                            Flickable {
+                                // To the screen's edge, as a console's media rows (from a gutter
+                                // before the column, so rings/glows aren't cut).
+                                x: -(30px * S.k);
+                                width: root.width - (96px * S.k) + (30px * S.k);
+                                height: parent.height;
+                                interactive: false;
+                                content-x: root.shots-x;
+                                content-width: root.hub.shots.length * (424px * S.k) + (72px * S.k);
+                                for s[i] in root.hub.shots: Rectangle {
+                                    x: (30px * S.k) + i * (424px * S.k);
+                                    y: (12px * S.k);
+                                    width: (400px * S.k);
+                                    height: (225px * S.k);
+                                    FocusRing { w: parent.width; h: parent.height; on: root.zone == Zone.shots && root.idx == i && root.overlay == 1; radius: (16px * S.k); }
+                                    Rectangle {
+                                        border-radius: (16px * S.k);
+                                        clip: true;
+                                        background: Theme.panel;
+                                        Shimmer { active: !s.loaded; }
+                                        Image {
+                                            source: s.image;
+                                            width: parent.width;
+                                            height: parent.height;
+                                            image-fit: cover;
+                                            opacity: s.loaded ? 1 : 0;
+                                            animate opacity { duration: 250ms; }
+                                        }
+                                    }
+                                    TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.shots, i); } }
+                                }
+                            }
+                            }
+                        }
+                    }
+                    // Details
+                    sec-details := VerticalLayout {
+                        init => { root.hub-at-details = self.y; }
+                        changed y => { root.hub-at-details = self.y; }
+                        padding-top: true ? (56px * S.k) : 0;
+                        spacing: (18px * S.k);
+                        if true: Text { text: "Details"; font-size: (30px * S.k); font-weight: 600; color: Theme.text; }
+                        for fr in root.hub.facts: HorizontalLayout {
+                            spacing: (14px * S.k);
+                            padding-bottom: (14px * S.k);
+                            for f in fr.items: Rectangle {
+                                width: (root.hub-text-w - (28px * S.k)) / 3;
+                                height: (92px * S.k);
+                                border-radius: (16px * S.k);
+                                background: #0b1020b8;
+                                border-width: 1px;
+                                border-color: Theme.line;
+                                VerticalLayout {
+                                    padding-left: (22px * S.k);
+                                    padding-right: (16px * S.k);
+                                    alignment: center;
+                                    spacing: (6px * S.k);
+                                    Text { text: f.key; font-size: (15px * S.k); font-weight: 600; letter-spacing: (1.5px * S.k); color: Theme.text3; }
+                                    Text { text: f.value; font-size: (21px * S.k); font-weight: 500; overflow: elide;
+                                        color: f.kind == 1 ? Theme.ok : f.kind == 2 ? Theme.warn : f.kind == 3 ? Theme.danger : f.kind == 4 ? Theme.text3 : Theme.text; }
+                                }
+                            }
+                        }
+                        Rectangle {
+                            height: (46px * S.k); border-radius: (10px * S.k);
+                            background: root.zone == Zone.hub-details ? #ffffff1f : #ffffff08;
+                            border-width: root.zone == Zone.hub-details ? (2px * S.k) : 1px;
+                            border-color: root.zone == Zone.hub-details ? Theme.text : Theme.line;
+                            Text { text: root.hub-details-open ? "−  Hide technical details" : "+  Technical details & installed game"; font-size: (18px * S.k); color: Theme.text2; }
+                            TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.hub-details, 0); } }
+                        }
+                        if root.hub-details-open: VerticalLayout {
+                            padding-top: (16px * S.k); spacing: (10px * S.k);
+                            for fr in root.hub.details: VerticalLayout {
+                                spacing: (10px * S.k);
+                                for f in fr.items: HorizontalLayout {
+                                    spacing: (18px * S.k);
+                                    Text { text: f.key; width: (280px * S.k); font-size: (17px * S.k); color: Theme.text3; }
+                                    Text { text: f.value; font-size: (19px * S.k); color: Theme.text2; wrap: word-wrap; horizontal-stretch: 1; }
+                                }
+                            }
+                        }
+                    }
+                    // About
+                    sec-about := VerticalLayout {
+                        init => { root.hub-at-about = self.y; }
+                        changed y => { root.hub-at-about = self.y; }
+                        padding-top: root.hub.about.length > 0 ? (56px * S.k) : 0;
+                        spacing: (18px * S.k);
+                        if root.hub.about.length > 0: Text { text: "About"; font-size: (30px * S.k); font-weight: 600; color: Theme.text; }
+                        if root.hub.about.length > 0: VerticalLayout {
+                            spacing: (16px * S.k);
+                            for p in root.hub.about: Text {
+                                // Explicit width: wrapped text inside a nested block is otherwise measured
+                                // unwrapped (one line), which made the page too short to scroll to the end.
+                                width: min(root.hub-text-w, (1120px * S.k));
+                                text: p;
+                                font-size: (21px * S.k);
+                                color: Theme.text2;
+                                wrap: word-wrap;
+                            }
                         }
                     }
                 }
             }
         }
 
+        // The page scrolls under a dark band, so Back always reads.
+        if root.overlay == 1: Rectangle {
+            y: 0;
+            height: (124px * S.k);
+            background: @linear-gradient(180deg, #04060ef7 0%, #04060ed9 55%, #04060e00 100%);
+            opacity: root.hub-y < -1px ? 1 : 0;
+            animate opacity { duration: 180ms; }
+        }
         if root.overlay == 1: BackButton {
             x: (96px * S.k);
             y: (44px * S.k);

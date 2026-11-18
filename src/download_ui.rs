@@ -785,6 +785,10 @@ impl App {
         ui.set_ring_suffix(suffix.into());
         ui.set_ring_sizer(sizer.into());
         ui.set_ring_path(ring_path(frac).into());
+        // The ring went (nothing's happening): its place in the top bar goes too.
+        if kind == 0 && self.zone == Z_TOP && self.idx == 4 && self.overlay == Overlay::None {
+            self.set_focus(Z_TOP, 3);
+        }
     }
 
     /// The top bar's glass: the art behind it, blurred (none over the dimmed Library). Also when

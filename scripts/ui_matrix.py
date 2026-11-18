@@ -31,11 +31,13 @@ STEPS = [
     ("01-home", ["sleep:9"]),
     ("01b-welcome", ["Left", "Down", "sleep:0.8"]),         # the Welcome tile's widgets
     ("01c-top-buttons", ["Up", "Up", "Right", "Right", "sleep:0.5"]),  # Search, round, focused
+    ("01d-avatar", ["Right", "Right", "sleep:0.5"]),        # past Settings: you (the avatar)
     ("02-home-new-game", ["Down", "Right", "Right", "Right"]),
     ("02b-home-peek", ["Down", "Down", "sleep:0.8"]),  # Home scrolled to the Hub's cards
     ("03-hub", ["Return", "sleep:1.5"]),   # the Compatibility card opens the Hub (never Play)
     ("03b-hub-up-to-home", ["Up", "sleep:1"]),              # Up from the Hub's top: back to the cards
     ("04-hub-scrolled", ["Down", "sleep:1.2", "Down", "Down", "sleep:0.8"]),
+    ("04b-hub-details", ["Down", "Return", "sleep:0.8"]),
     ("05-library", ["Escape", "Escape", "Up", "Up", "Right", "Return", "sleep:1.5"]),
     ("06-library-down", ["Down", "Down", "Down", "sleep:1"]),
     ("07-search", ["slash", "r", "e", "s", "i", "sleep:1"]),
