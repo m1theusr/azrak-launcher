@@ -99,6 +99,8 @@ export component AppWindow inherits Window {
     in property <int> zone;
     in property <int> idx;
     in property <string> clock;
+    // On AzrakOS (the launcher is the whole system): Power shuts down instead of quitting.
+    in property <bool> on-os;
     // A laptop's battery (src/battery.rs): shown next to the clock when the PC has one.
     in property <bool> battery-shown;
     in property <int> battery-percent;
@@ -1984,6 +1986,116 @@ export component AppWindow inherits Window {
                         }
                         TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.menu, i); } }
                     }
+                }
+            }
+        }
+
+        // ------------------------------------------------------------ CONTROL CENTER
+        // Guide's panel (src/control_center.rs). Items in focus order: [Back to game, Close game]
+        // when a game runs, Downloads, then Library, Settings, Controls, Power.
+        if root.overlay == 16: Rectangle {
+            property <bool> entered: false;
+            property <int> o: root.running.active ? 2 : 0;
+            init => { entered = true; }
+            background: entered ? #03050cb3 : #03050c00;
+            animate background { duration: 200ms; }
+            TouchArea { clicked => { root.click(Zone.control-center, -1); } }
+            cc-panel := Rectangle {
+                height: (400px * S.k);
+                y: entered ? root.height - self.height : root.height;
+                animate y { duration: 320ms; easing: ease-out-expo; }
+                background: #101628f5;
+                border-width: 1px;
+                border-color: Theme.line;
+                TouchArea {}
+                // Top row: the running game, then the downloads.
+                HorizontalLayout {
+                    x: (96px * S.k);
+                    y: (36px * S.k);
+                    height: (170px * S.k);
+                    spacing: (20px * S.k);
+                    alignment: start;
+                    if root.running.active: Rectangle {
+                        width: (560px * S.k);
+                        border-radius: (20px * S.k);
+                        background: #1c2440;
+                        VerticalLayout {
+                            padding: (22px * S.k);
+                            spacing: (6px * S.k);
+                            Text { text: "NOW PLAYING · " + root.running.time; font-size: (15px * S.k); font-weight: 600; letter-spacing: (1.5px * S.k); color: Theme.text2; }
+                            Text { text: root.running.name; font-size: (26px * S.k); font-weight: 600; color: Theme.text; overflow: elide; }
+                            Rectangle { vertical-stretch: 1; }
+                            HorizontalLayout {
+                                spacing: (12px * S.k);
+                                alignment: start;
+                                for b[i] in [{ label: "Back to game", danger: false }, { label: "Close game", danger: true }]: Rectangle {
+                                    property <bool> f: root.zone == Zone.control-center && root.idx == i;
+                                    width: cc-btn-label.preferred-width + (40px * S.k);
+                                    height: (48px * S.k);
+                                    border-radius: self.height / 2;
+                                    background: f ? (b.danger ? Theme.danger : #ffffff) : b.danger ? #ff5a6a2e : #ffffff24;
+                                    drop-shadow-blur: f ? (24px * S.k) : 0;
+                                    drop-shadow-color: Theme.glow;
+                                    animate background { duration: Theme.fast; }
+                                    cc-btn-label := Text { text: b.label; font-size: (19px * S.k); font-weight: 600; color: f && !b.danger ? #0a0d18 : #ffffff; vertical-alignment: center; horizontal-alignment: center; }
+                                    TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.control-center, i); } }
+                                }
+                            }
+                        }
+                    }
+                    dl-card := Rectangle {
+                        property <bool> f: root.zone == Zone.control-center && root.idx == o;
+                        width: (480px * S.k);
+                        FocusRing { w: parent.width; h: parent.height; on: dl-card.f; radius: (20px * S.k); }
+                        // Over the ring, as cover art is elsewhere: the ring's halo fills its shape.
+                        Rectangle { border-radius: (20px * S.k); background: #1c2440; }
+                        VerticalLayout {
+                            padding: (22px * S.k);
+                            spacing: (8px * S.k);
+                            Text { text: "DOWNLOADS"; font-size: (15px * S.k); font-weight: 600; letter-spacing: (1.5px * S.k); color: Theme.text2; }
+                            Text {
+                                text: root.ring-kind > 0 ? root.ring-label + root.ring-suffix : "Nothing downloading";
+                                font-size: (24px * S.k);
+                                font-weight: 600;
+                                color: root.ring-kind == 3 ? Theme.warn : root.ring-kind == 5 ? Theme.ok : Theme.text;
+                                overflow: elide;
+                            }
+                            Rectangle { vertical-stretch: 1; }
+                            Text { text: "Open Downloads"; font-size: (17px * S.k); color: Theme.hint; }
+                        }
+                        TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.control-center, o); } }
+                    }
+                }
+                // Bottom row: quick ways around.
+                HorizontalLayout {
+                    x: (96px * S.k);
+                    y: (232px * S.k);
+                    height: (128px * S.k);
+                    spacing: (18px * S.k);
+                    alignment: start;
+                    for t[i] in [{ label: "Library", icon: "grid" }, { label: "Settings", icon: "gear" }, { label: "Controls", icon: "info" },
+                                 { label: root.on-os ? "Power" : "Quit", icon: "power" }]: Rectangle {
+                        property <bool> f: root.zone == Zone.control-center && root.idx == o + 1 + i;
+                        width: (128px * S.k);
+                        border-radius: (20px * S.k);
+                        background: f ? #ffffff : #ffffff14;
+                        transform-scale: f ? 1.05 : 1.0;
+                        animate background { duration: Theme.fast; }
+                        animate transform-scale { duration: 220ms; easing: ease-out-back; }
+                        drop-shadow-blur: f ? (24px * S.k) : 0;
+                        drop-shadow-color: Theme.glow;
+                        Image { source: Icons.get(t.icon); colorize: f ? #0a0d18 : Theme.text; width: (34px * S.k); height: (34px * S.k); y: (30px * S.k); }
+                        Text { text: t.label; y: (80px * S.k); width: parent.width; horizontal-alignment: center; font-size: (17px * S.k); font-weight: 500; color: f ? #0a0d18 : Theme.text; }
+                        TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.control-center, o + 1 + i); } }
+                    }
+                }
+                Text {
+                    x: parent.width - self.width - (96px * S.k);
+                    y: (40px * S.k);
+                    text: root.clock;
+                    font-size: (34px * S.k);
+                    font-weight: 600;
+                    color: Theme.text;
                 }
             }
         }
