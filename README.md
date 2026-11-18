@@ -1,13 +1,18 @@
-<p align="center"><img src="assets/azrak.svg" width="128" alt="Azrak"></p>
+<p align="center"><img src="assets/swarmplay.svg" width="128" alt="SwarmPlay"></p>
 
-# Azrak Launcher
+# SwarmPlay
+
+SwarmPlay is a fork of [Azrak Launcher](https://github.com/AzrakHQ/azrak-launcher) (MIT), with fixes
+for Fedora Atomic/Bazzite, PS5 PFS (`.ffpfsc`) images and a console-style redesign. The game
+catalog still comes from Azrak Launcher. Its settings and data stay in the same folders
+(`~/.config/azrak`, `~/.local/share/azrak`, `~/.cache/azrak`), so switching keeps everything.
 
 A console-style home screen for Linux. Browse PS5, PS4 and PC games with their official artwork, download
 and install them, and play them with the [KytyPS5](https://github.com/KytyPS5/KytyPS5) (PS5) and
 [shadPS4](https://github.com/shadps4-emu/shadPS4) (PS4) emulators, using a controller, keyboard or
 mouse.
 
-![Azrak Launcher: the Home screen, a Game Hub, then the Library filtered to PS4 games and a PS4 game's Hub](docs/demo/demo-loop.webp)
+![The Home screen, a Game Hub, then the Library filtered to PS4 games and a PS4 game's Hub](docs/demo/demo-loop.webp)
 
 - **Your games on a console-style Home screen**, with official backgrounds, logos and trailers that
   play right in the launcher.
@@ -26,17 +31,18 @@ You need 64-bit Linux: Ubuntu 22.04+, Debian 12+, Fedora 36+, Mint 21+, Arch or 
 Open a terminal and run:
 
 ```bash
-curl -fsSL https://github.com/AzrakHQ/azrak-launcher/releases/latest/download/azrak-linux-x86_64.tar.gz | tar xz && ./azrak-linux-x86_64/install.sh
+git clone https://github.com/m1theusr/azrak-launcher.git swarmplay && cd swarmplay && ./install.sh
 ```
 
-**Azrak Launcher** is now in your app menu. For trailers, switching between a game and the
+It builds from source (Rust, `pkg-config` and the fontconfig and xkbcommon development packages;
+the script says what to install). **SwarmPlay** is now in your app menu. For trailers, switching between a game and the
 launcher, and installing from archives, also run (Ubuntu, Debian, Mint):
 
 ```bash
 sudo apt install xdotool mpv libarchive13
 ```
 
-To uninstall: `./azrak-linux-x86_64/install.sh --uninstall`
+To uninstall: `./install.sh --uninstall` in that folder
 
 ## Or turn a spare PC into a console
 
@@ -55,10 +61,10 @@ What the PC needs, and help with the install, is in
 
 ## Getting started
 
-1. Open **Azrak Launcher** from your app menu, or run this in a terminal:
+1. Open **SwarmPlay** from your app menu, or run this in a terminal:
 
    ```bash
-   azrak
+   swarmplay
    ```
 
    The first launch downloads artwork and KytyPS5, which takes about a minute.

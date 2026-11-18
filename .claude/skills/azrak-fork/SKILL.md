@@ -1,16 +1,21 @@
 ---
 name: azrak-fork
-description: Build, test, install, update and release the user's fork of Azrak Launcher (github.com/m1theusr/azrak-launcher, a Rust/Slint game launcher) on their Bazzite machine. Use when asked to rebuild/reinstall Azrak, pull upstream changes into the fork, debug Azrak install/library problems, change the launcher's code, or publish a fork release.
+description: Build, test, install, update and release SwarmPlay, the user's fork of Azrak Launcher (github.com/m1theusr/azrak-launcher, a Rust/Slint game launcher) on their Bazzite machine. Use when asked to rebuild/reinstall Azrak, pull upstream changes into the fork, debug Azrak install/library problems, change the launcher's code, or publish a fork release.
 ---
 
-# Azrak Launcher fork
+# SwarmPlay (fork of Azrak Launcher)
+
+The program and everything a person sees is **SwarmPlay** (binary `swarmplay`, icon `assets/swarmplay.svg`,
+menu entry `swarmplay.desktop`). The Cargo package, data folders (`util::APP_NAME = "azrak"`), file markers
+(`.azrak-owned`, `.azrak-game.json`), the game catalog (`update::REPO`) and AzrakOS keep upstream's names on
+purpose: installs keep working and upstream merges stay easy.
 
 - Source: `~/Projects/azrak-launcher` (`origin` = m1theusr/azrak-launcher, `upstream` = AzrakHQ/azrak-launcher).
-- Installed binary: `~/.local/bin/azrak` (previous one kept as `azrak.previous`). Menu entry: `~/.local/share/applications/azrak.desktop`.
+- Installed binary: `~/.local/bin/swarmplay` (previous one kept as `swarmplay.previous`). Menu entry: `~/.local/share/applications/swarmplay.desktop`.
 - User data: config `~/.config/azrak/config.json`, download jobs `~/.config/azrak/transfers/jobs.json`,
   install records `~/.config/azrak/installs/jobs.json`, emulators `~/.local/share/azrak`, cache `~/.cache/azrak`.
 - Logs: the launcher logs to stderr, which lands in the user journal:
-  `journalctl --user --since today --no-pager | grep 'azrak.desktop'`. Install failures are NOT logged there;
+  `journalctl --user --since today --no-pager | grep 'swarmplay.desktop'`. Install failures are NOT logged there;
   they are in the UI and in `~/.config/azrak/installs/jobs.json` (`error` field).
 
 ## Change workflow (the user's rule)
@@ -58,13 +63,13 @@ Run the full test suite before installing; report failures with their output, ne
 The launcher must be closed first or it keeps running the old binary (Settings → Quit, or Ctrl+Q).
 
 ```bash
-pgrep -x azrak && echo "close Azrak first"   # ask the user to quit it; don't kill it while a game/install runs
-install -Dm755 ~/.local/bin/azrak ~/.local/bin/azrak.previous 2>/dev/null || true
-install -Dm755 ~/Projects/azrak-launcher/target/release/azrak ~/.local/bin/azrak
-~/.local/bin/azrak --version
+pgrep -x swarmplay && echo "close SwarmPlay first"   # ask the user to quit it; don't kill it while a game/install runs
+install -Dm755 ~/.local/bin/swarmplay ~/.local/bin/swarmplay.previous 2>/dev/null || true
+install -Dm755 ~/Projects/azrak-launcher/target/release/swarmplay ~/.local/bin/swarmplay
+~/.local/bin/swarmplay --version
 ```
 
-Rollback: `mv ~/.local/bin/azrak.previous ~/.local/bin/azrak`.
+Rollback: `mv ~/.local/bin/swarmplay.previous ~/.local/bin/swarmplay`.
 
 ## Update from upstream
 

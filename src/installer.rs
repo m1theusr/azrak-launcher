@@ -167,7 +167,7 @@ impl Manager {
     /// a while, and nothing (the launcher, an install) should wait for it.
     pub fn uninstall(&self, key: &str) -> Result<PathBuf> {
         let mut jobs = self.core.jobs.lock().unwrap();
-        let job = jobs.iter().find(|j| j.key == key && j.state == State::Installed).context("This game wasn't installed by Azrak")?;
+        let job = jobs.iter().find(|j| j.key == key && j.state == State::Installed).context("This game wasn't installed by SwarmPlay")?;
         let path = job.path.clone().context("Its install folder wasn't recorded")?;
         let home = std::env::var_os("HOME").map(PathBuf::from);
         ensure!(path.is_absolute() && path.components().count() >= 3 && Some(&path) != home.as_ref()

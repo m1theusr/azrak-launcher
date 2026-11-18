@@ -48,9 +48,9 @@ fn pc(names: &[(String, String, usize)]) -> Option<String> {
     }
     let has = |test: &dyn Fn(&str) -> bool| names.iter().any(|(_, name, _)| test(name));
     Some(if let Some(kind) = names.iter().find_map(|(_, name, _)| package(name)) {
-        format!("it's {kind}, which Azrak doesn't install")
+        format!("it's {kind}, which SwarmPlay doesn't install")
     } else if has(&|n| [".iso", ".mdf", ".mds", ".cue", ".nrg", ".ccd", ".img"].iter().any(|ext| n.ends_with(ext))) {
-        "it's a disc image, which Azrak doesn't mount".into()
+        "it's a disc image, which SwarmPlay doesn't mount".into()
     } else if has(&|n| n.ends_with(".jar")) {
         "it's a Java .jar with nothing that starts it".into()
     } else if has(&|n| n.ends_with(".love")) {

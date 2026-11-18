@@ -64,7 +64,7 @@ impl App {
                     "settings" => self.open_settings(),
                     "controls" => self.open_controls(),
                     _ if crate::os::system::on_os() => self.power_ask(crate::os::power::Power::ShutDown),
-                    _ => { crate::app::quit("Control Center → Quit Azrak Launcher"); }
+                    _ => { crate::app::quit("Control Center → Quit SwarmPlay"); }
                 }
             }
             _ => {}

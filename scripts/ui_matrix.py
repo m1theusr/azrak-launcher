@@ -86,7 +86,7 @@ def shoot(size: str, n: int, out: Path, binary: Path, game: Path | None):
         ids = []
         for _ in range(30):
             ids = (run(["xdotool", "search", "--pid", str(app.pid)], env=env, capture_output=True, text=True).stdout.split()
-                   or run(["xdotool", "search", "--class", "azrak"], env=env, capture_output=True, text=True).stdout.split())
+                   or run(["xdotool", "search", "--class", "swarmplay|azrak"], env=env, capture_output=True, text=True).stdout.split())
             if ids or app.poll() is not None:
                 break
             time.sleep(1)
@@ -116,7 +116,7 @@ def shoot(size: str, n: int, out: Path, binary: Path, game: Path | None):
 
 def main():
     sizes = sys.argv[1:] or SIZES
-    binary = ROOT / "target/release/azrak"
+    binary = ROOT / "target/release/swarmplay"
     out = ROOT / "dist/ui-matrix"
     out.mkdir(parents=True, exist_ok=True)
     game = Path(os.environ["DEMO_GAME"]) if os.environ.get("DEMO_GAME") else None

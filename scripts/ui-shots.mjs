@@ -22,7 +22,7 @@ const root = resolve(dirname(script), '..');
 const args = process.argv.slice(2);
 const flag = name => args.includes(name);
 const option = name => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : null; };
-const binary = resolve(args.find((a, i) => !a.startsWith('--') && args[i - 1] !== '--sizes') || join(root, 'target/release/azrak'));
+const binary = resolve(args.find((a, i) => !a.startsWith('--') && args[i - 1] !== '--sizes') || join(root, 'target/release/swarmplay'));
 // Odd sizes on purpose: a window that isn't 16:9 or a round number is where layouts break.
 const sizes = (option('--sizes') || '1280x720,1366x768,1600x900,1737x1047,1920x1080,2560x1440')
   .split(',').map(s => s.split('x').map(Number));

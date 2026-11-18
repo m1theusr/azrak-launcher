@@ -12,7 +12,7 @@ import { promisify } from 'node:util';
 const exec = promisify(execCallback);
 const script = fileURLToPath(import.meta.url);
 const root = resolve(dirname(script), '..');
-const binary = resolve(process.argv[2] || join(root, 'target/release/azrak'));
+const binary = resolve(process.argv[2] || join(root, 'target/release/swarmplay'));
 if (process.env.PS5_DOWNLOAD_TEST_ISOLATED !== '1') {
   const result = spawnSync('unshare', ['--user', '--map-root-user', '--net', 'xvfb-run', '-a',
     '-s', '-screen 0 1920x1080x24', process.execPath, script, binary], {
