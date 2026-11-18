@@ -155,7 +155,7 @@ impl Game {
     }
 
     /// A PS5 release shipped as a PKG package, which the launcher can't install (PS5 games
-    /// install from folders, archives and exFAT images). PS4 PKGs are extracted on install.
+    /// install from folders, archives and exFAT or PFS images). PS4 PKGs are extracted on install.
     pub fn is_pkg(&self) -> bool {
         static PKG: LazyLock<regex::Regex> = LazyLock::new(|| regex::Regex::new(r"(?i)\bf?pkg\b").unwrap());
         self.platform == Platform::Ps5 && (PKG.is_match(&self.detail("format")) || PKG.is_match(&self.title))
