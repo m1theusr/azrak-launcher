@@ -13,6 +13,24 @@ description: Build, test, install, update and release the user's fork of Azrak L
   `journalctl --user --since today --no-pager | grep 'azrak.desktop'`. Install failures are NOT logged there;
   they are in the UI and in `~/.config/azrak/installs/jobs.json` (`error` field).
 
+## Change workflow (the user's rule)
+
+Every fix or customization goes through a pull request into the fork's `main`:
+
+1. `git checkout main && git pull --ff-only origin main && git checkout -b fix/<short-name>` (or `feat/<short-name>`).
+2. Make the change with tests; build and run the full suite (below). One topic per branch, one commit per logical change.
+3. `git push -u origin <branch>` and open the PR **on the fork**, always passing the repo explicitly, or `gh`
+   targets upstream: `gh pr create --repo m1theusr/azrak-launcher --base main --head <branch> ...`
+   (summary + test plan; end the body with the Claude Code attribution line).
+4. Merge with a merge commit, `gh pr merge <n> --repo m1theusr/azrak-launcher --merge`, then sync local `main`
+   and install the build.
+
+Never push to `AzrakHQ/azrak-launcher` and never open a PR there unless the user asks for that specific change.
+The user has read-only access upstream. Fixes useful to everyone (like the symlink fix) can be offered upstream
+later, as their own branch made from `upstream/main` with only that commit.
+
+Git identity in this repo: `Matheus Martucci Rodrigues <88255921+m1theusr@users.noreply.github.com>` (repo-local config).
+
 ## Host facts that matter
 
 - Bazzite (Fedora Atomic): `/home` is a root-owned symlink to `var/home`, `$HOME=/home/m1theusr`.
