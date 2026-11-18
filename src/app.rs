@@ -367,6 +367,8 @@ pub struct App {
     pub settings_section: usize,
     /// Settings was opened onto a row from elsewhere, and the player hasn't moved to the sections.
     pub settings_direct: bool,
+    /// Settings shows its first page, the list of sections (a section's page otherwise).
+    pub settings_root: bool,
     /// Each section's header (GAMES, DOWNLOADS…): what its notes are worked out from.
     pub settings_headers: Vec<String>,
     /// Downloads and installs going on at the last look, and those that finished since (with
@@ -689,6 +691,7 @@ pub fn run(ui: AppWindow, monitors: Vec<Monitor>, target_monitor: Option<Monitor
         settings_sections: Vec::new(),
         settings_section: 0,
         settings_direct: false,
+        settings_root: true,
         settings_headers: Vec::new(),
         ring_seen: HashSet::new(),
         ring_busy: HashSet::new(),
@@ -759,6 +762,7 @@ pub fn run(ui: AppWindow, monitors: Vec<Monitor>, target_monitor: Option<Monitor
     });
 
     wire_callbacks(&ui);
+    with_app(|app| app.apply_theme());
     crate::gamepad::spawn(|p| post(move |app| app.on_pad(p)));
 
     // Clock + session timers: one cheap tick per second (only changed text is pushed).
@@ -871,6 +875,7 @@ fn wire_callbacks(ui: &AppWindow) {
         last_step.set(Some(std::time::Instant::now()));
         with_app(move |app| app.home_wheel(dy))
     });
+    ui.on_hub_wheel(|dy| with_app(move |app| app.hub_wheel(dy)));
     ui.on_grid_scrolled(|| with_app(|app| app.push_grid_window()));
     ui.on_grid_wheel(|dy| with_app(move |app| app.grid_wheel(dy)));
     ui.on_resized(|| with_app(|app| {
@@ -2133,8 +2138,10 @@ impl App {
             // Back from the rows to their own section (the hint clicked) sounds like Back.
             let back = self.zone == Z_SETTINGS && idx as usize == self.settings_section;
             audio::play(if back { Sound::Back } else { Sound::Move });
+            // On the first page a section opens; on a section's page it shows its rows.
+            let enter = self.settings_root;
             self.focus_settings_nav(idx as usize);
-            if idx as usize >= self.settings_sections.len() { self.act(Act::Confirm); }
+            if enter || idx as usize >= self.settings_sections.len() { self.act(Act::Confirm); }
             return;
         }
         if zone == Z_WIFI_JOIN && self.overlay == Overlay::WifiJoin {
@@ -2243,6 +2250,10 @@ impl App {
     }
 
     pub fn act(&mut self, a: Act) {
+        // The Hub is going (a quarter second): nothing lands on it meanwhile.
+        if self.overlay == Overlay::Hub && self.ui().get_hub_leaving() {
+            return;
+        }
         if self.boot.active {
             if a == Act::Confirm && (self.boot.first || self.boot.ready) {
                 self.boot_confirm();
@@ -2719,6 +2730,20 @@ impl App {
     }
 
     pub fn back(&mut self) {
+        // A Hub scrolled into from Home goes back down the way it came, then closes.
+        if self.overlay == Overlay::Hub && self.stack.len() == 1 && self.ui().get_hub_scrolled() {
+            if self.ui().get_hub_leaving() { return; }
+            audio::play(Sound::Back);
+            self.ui().set_hub_leaving(true);
+            slint::Timer::single_shot(Duration::from_millis(230), || with_app(|app| {
+                if app.overlay == Overlay::Hub && app.ui().get_hub_leaving() {
+                    app.ui().set_hub_scrolled(false);
+                    app.back();
+                    app.ui().set_hub_leaving(false);
+                }
+            }));
+            return;
+        }
         if self.overlay == Overlay::Trailer {
             crate::trailer::close();
             self.trailer_timer = None;
@@ -3270,8 +3295,14 @@ impl App {
             }
             _ => return,
         }
-        // The page is laid out on the next frame: its sections say where they are then.
-        slint::Timer::single_shot(Duration::from_millis(80), || with_app(|app| app.scroll_hub()));
+        // The page is laid out on the next frame: its sections say where they are then. It
+        // comes in only once it's there (no jump to the section in view).
+        self.ui().set_hub_ready(false);
+        slint::Timer::single_shot(Duration::from_millis(70), || with_app(|app| {
+            app.ui().set_hub_glide(0);
+            app.scroll_hub();
+            app.ui().set_hub_ready(true);
+        }));
     }
 
     pub fn open_hub(&mut self, t: Target) {
@@ -3279,6 +3310,9 @@ impl App {
         self.library_waiting = None;
         self.ui().set_hub_details_open(false);
         self.ui().set_hub_scrolled(false);
+        self.ui().set_hub_ready(true);
+        self.ui().set_hub_leaving(false);
+        self.ui().set_hub_glide(0);
         if *crate::images::DEBUG {
             let ui = self.ui();
             slint::Timer::single_shot(Duration::from_millis(1500), move || {
@@ -3441,6 +3475,7 @@ impl App {
         self.sys_poll();
         // The first section, with the sections in focus.
         self.settings_section = 0;
+        self.set_settings_root(true);
         self.settings_direct = false;
         self.build_settings();
         // No glass from the last time it was open (other art) until this art's is ready.

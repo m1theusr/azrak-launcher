@@ -24,14 +24,15 @@ export global Theme {
     // Hints and quiet values that are read from across the room (Settings, the cards on it):
     // text3 is too faint for a TV a few metres away.
     out property <color> hint: #9ba6c0;
-    out property <color> accent: #0a6cff;
+    // The theme's accent (src/theme.rs sets it from Settings → Theme).
+    in-out property <color> accent: #0a6cff;
     out property <color> ok: #3ddc97;
     out property <color> warn: #ffb547;
     out property <color> danger: #ff5a6a;
     out property <color> line: #ffffff1c;
     out property <color> ring: #ffffff;
     // The focus halo: a lighter blue than the accent, so it shows over dark blue art too.
-    out property <color> glow: #4d9bffc7;
+    in-out property <color> glow: #4d9bffc7;
     out property <duration> fast: 160ms;
 
     // KytyPS5 compatibility colours: in-game, menus, boots, doesn't boot, untested.
@@ -68,6 +69,7 @@ export global Icons {
     out property <image> more: @image-url("../assets/icons/more.svg");
     out property <image> gamepad: @image-url("../assets/icons/gamepad.svg");
     out property <image> sparkle: @image-url("../assets/icons/sparkle.svg");
+    out property <image> palette: @image-url("../assets/icons/palette.svg");
     out property <image> spinner: @image-url("../assets/icons/spinner.svg");
     out property <image> wifi: @image-url("../assets/icons/wifi.svg");
     out property <image> lock: @image-url("../assets/icons/lock.svg");
@@ -93,7 +95,8 @@ export global Icons {
             : name == "check" ? check : name == "folder" ? folder : name == "log" ? log
             : name == "lock" ? lock : name == "shift" ? shift : name == "eye" ? eye : name == "eye-off" ? eye-off
             : name == "pause" ? pause : name == "close" ? close : name == "trash" ? trash : name == "retry" ? retry
-            : name == "unshare" ? unshare : name == "share" ? share : name == "more" ? more : none;
+            : name == "unshare" ? unshare : name == "share" ? share : name == "more" ? more
+            : name == "gamepad" ? gamepad : name == "sparkle" ? sparkle : name == "palette" ? palette : name == "wifi" ? wifi : none;
     }
 }
 
@@ -272,7 +275,7 @@ export struct HubData {
 }
 
 // A section of Settings, in its left column: note beside it (note-kind 0 dim, 1 blue, 2 amber).
-export struct SettingSection { label: string, sub: string, note: string, note-kind: int }
+export struct SettingSection { label: string, sub: string, note: string, note-kind: int, icon: string }
 
 export struct SettingData {
     kind: int,        // 0 header, 1 text, 2 toggle, 3 cycle, 4 button
