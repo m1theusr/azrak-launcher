@@ -206,7 +206,7 @@ def main():
     game = Path(os.environ["DEMO_GAME"]) if os.environ.get("DEMO_GAME") else None
     problems = []
     for i, s in enumerate(sizes):
-        problems += audit(s, i, out, ROOT / "target/release/azrak", game)
+        problems += audit(s, i, out, ROOT / "target/release/swarmplay", game)
     (out / "report.txt").write_text("\n".join(problems) + "\n" if problems else "No problems found.\n")
     print("\n".join(problems) if problems else "No problems found.")
     sys.exit(1 if problems else 0)

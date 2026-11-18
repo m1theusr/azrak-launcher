@@ -65,7 +65,7 @@ pub fn status(text: &str) -> String {
     if text.starts_with("Downloading KytyPS5") || text.starts_with("Installing KytyPS5") {
         return support("PS5");
     }
-    if text.starts_with("Downloading Azrak Launcher") {
+    if text.starts_with("Downloading SwarmPlay") {
         return format!("Getting the launcher's update{tail}");
     }
     if let Some(done) = text.strip_prefix("Downloading artwork ").or_else(|| text.strip_prefix("Downloading game art ")) {
@@ -106,7 +106,7 @@ mod tests {
         assert_eq!(status("Downloading artwork 1382/3602"), "Getting game pictures · 38%");
         assert_eq!(status("Downloading game art 10/20"), "Getting game pictures · 50%");
         assert_eq!(status("Downloading the PS4 catalog"), "Updating the PS4 game list…");
-        assert_eq!(status("Downloading Azrak Launcher 1.18.0 · 5%"), "Getting the launcher's update · 5%");
+        assert_eq!(status("Downloading SwarmPlay 1.18.0 · 5%"), "Getting the launcher's update · 5%");
         assert_eq!(status("Checking for new releases…"), "Checking for new releases…");
         assert_eq!(status(""), "");
     }

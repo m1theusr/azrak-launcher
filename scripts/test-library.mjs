@@ -20,7 +20,7 @@ const inner = process.argv[2] === '--namespace';
 const args = inner ? process.argv.slice(5) : process.argv.slice(2);
 assert.ok(args.filter(arg => !arg.startsWith('--')).length <= 1, 'Supply at most one binary path');
 assert.ok(args.filter(arg => arg.startsWith('--')).every(arg => arg === '--full-hd'), 'Only --full-hd is supported');
-const binary = resolve(args.find(arg => !arg.startsWith('--')) || join(root, 'target/release/azrak'));
+const binary = resolve(args.find(arg => !arg.startsWith('--')) || join(root, 'target/release/swarmplay'));
 const fullHD = args.includes('--full-hd');
 const normalize = text => text.replace(/\s+/g, ' ').trim();
 const sha1 = value => createHash('sha1').update(value).digest('hex');

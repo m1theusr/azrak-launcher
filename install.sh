@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Azrak Launcher installer: installs the launcher and adds it to your app menu.
+# SwarmPlay installer: installs the launcher and adds it to your app menu.
 # In a release download it installs the included binary; in a source checkout it builds first.
 #
 #   ./install.sh               install for the current user (no sudo)
@@ -8,7 +8,7 @@
 #   PREFIX=/usr/local sudo -E ./install.sh   system-wide install
 set -euo pipefail
 
-APP=azrak
+APP=swarmplay
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PREFIX="${PREFIX:-$HOME/.local}"
 BIN_DIR="$PREFIX/bin"
@@ -39,7 +39,7 @@ distro_hint() {
 }
 
 uninstall() {
-    bold "Removing Azrak Launcher"
+    bold "Removing SwarmPlay"
     rm -f "$BIN_DIR/$APP" "$BIN_DIR/$APP.previous" "$APPS_DIR/$APP.desktop" "$ICON_DIR/$APP.svg" "$AUTOSTART_DIR/$APP.desktop"
     command -v update-desktop-database >/dev/null && update-desktop-database "$APPS_DIR" 2>/dev/null || true
     ok "Removed. Settings and cache are kept in ~/.config/$APP and ~/.cache/$APP (delete them to reset)."
@@ -55,13 +55,13 @@ for arg in "$@"; do
     esac
 done
 
-[ "$(uname -s)" = "Linux" ] || die "Azrak Launcher runs on Linux only."
+[ "$(uname -s)" = "Linux" ] || die "SwarmPlay runs on Linux only."
 
 # Release archives ship a prebuilt binary next to this script: nothing to compile.
 PREBUILT="$HERE/$APP"
 if [ -f "$PREBUILT" ] && [ ! -f "$HERE/Cargo.toml" ]; then
     bold "1/2  Checking the prebuilt binary"
-    "$PREBUILT" --version >/dev/null 2>&1 || die "The prebuilt binary does not run on this system (it needs glibc 2.35+, e.g. Ubuntu 22.04 or newer). Build from source instead: https://github.com/AzrakHQ/azrak-launcher#build-from-source"
+    "$PREBUILT" --version >/dev/null 2>&1 || die "The prebuilt binary does not run on this system (it needs glibc 2.35+, e.g. Ubuntu 22.04 or newer). Build from source instead: https://github.com/m1theusr/azrak-launcher#install"
     ok "$("$PREBUILT" --version)"
     BIN_SRC="$PREBUILT"
     STEP="2/2"
@@ -105,14 +105,14 @@ install -m 644 "assets/$APP.svg" "$ICON_DIR/$APP.svg"
 cat > "$APPS_DIR/$APP.desktop" <<EOF
 [Desktop Entry]
 Type=Application
-Name=Azrak Launcher
+Name=SwarmPlay
 GenericName=Game Launcher
 Comment=Console-style game launcher for Linux
 Exec=$BIN_DIR/$APP
 Icon=$APP
 Terminal=false
 Categories=Game;
-Keywords=azrak;ps5;ps4;playstation;kyty;shadps4;emulator;games;
+Keywords=swarmplay;azrak;ps5;ps4;playstation;kyty;shadps4;emulator;games;
 StartupWMClass=$APP
 EOF
 ok "Binary      $BIN_DIR/$APP"
@@ -137,4 +137,4 @@ case ":$PATH:" in
     *) warn "$BIN_DIR is not in your PATH; start it from the app menu or run $BIN_DIR/$APP" ;;
 esac
 echo
-bold "Done! Start Azrak Launcher from your app menu, or run:  $APP"
+bold "Done! Start SwarmPlay from your app menu, or run:  $APP"

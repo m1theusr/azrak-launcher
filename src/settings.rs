@@ -172,12 +172,12 @@ impl App {
         // Azrak Launcher
         let cur = crate::update::current_version();
         let latest = self.upd.latest.as_ref().map(|r| r.version.clone());
-        let mut r = row(4, "Azrak Launcher");
+        let mut r = row(4, "SwarmPlay");
         r.hint = "This app".into();
         let (value, kind) = if let Some(v) = &self.upd.installed {
             (format!("Restart to finish · {v}"), 3)
         } else if self.upd.busy {
-            (self.upd.progress.replace("Downloading Azrak Launcher ", ""), 0)
+            (self.upd.progress.replace("Downloading SwarmPlay ", ""), 0)
         } else if self.upd.checking {
             ("Checking…".to_string(), 0)
         } else if self.app_update_available() {
@@ -331,7 +331,7 @@ impl App {
             r.danger = true;
             rows.push((SId::ShutDown, r));
         } else {
-            let mut r = row(4, "Quit Azrak Launcher");
+            let mut r = row(4, "Quit SwarmPlay");
             r.value = "Ctrl+Q".into();
             r.danger = true;
             rows.push((SId::Quit, r));
@@ -409,17 +409,17 @@ impl App {
             "ADVANCED" => ("KytyPS5 location and video options, the game catalog", (String::new(), 0)),
             _ => ("", (String::new(), 0)),
         };
-        let sub = if header == "ABOUT" { format!("Azrak Launcher {}", crate::update::current_version()) } else { sub.to_string() };
+        let sub = if header == "ABOUT" { format!("SwarmPlay {}", crate::update::current_version()) } else { sub.to_string() };
         SettingSection { label: label.into(), sub: sub.into(), note: note.into(), note_kind }
     }
 
     /// The launcher's version and whether it's up to date, under the sections.
     fn version_line(&self) -> String {
         let cur = crate::update::current_version();
-        if self.upd.installed.is_some() { format!("Azrak Launcher {cur} · restart to update") }
-        else if self.app_update_available() { format!("Azrak Launcher {cur} · update ready") }
-        else if self.upd.latest.is_some() { format!("Azrak Launcher {cur} · up to date") }
-        else { format!("Azrak Launcher {cur}") }
+        if self.upd.installed.is_some() { format!("SwarmPlay {cur} · restart to update") }
+        else if self.app_update_available() { format!("SwarmPlay {cur} · update ready") }
+        else if self.upd.latest.is_some() { format!("SwarmPlay {cur} · up to date") }
+        else { format!("SwarmPlay {cur}") }
     }
 
     /// The rows under the sections (Quit, or Restart and Shut down), by row number.
@@ -782,7 +782,7 @@ impl App {
                 self.note_setting(SId::Rescan, &format!("{} found", plural(n, "game")), 1);
             }
             SId::Quit => {
-                crate::app::quit("Settings → Quit Azrak Launcher");
+                crate::app::quit("Settings → Quit SwarmPlay");
             }
             SId::Downloads => self.open_downloads(None),
             SId::Vpn => {

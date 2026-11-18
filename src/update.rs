@@ -17,7 +17,7 @@ pub const REPO: &str = "AzrakHQ/azrak-launcher";
 /// Where this build updates itself from: the fork, so an upstream release never replaces it.
 /// `AZRAK_UPDATE_REPO` overrides it.
 const UPDATE_REPO: &str = "m1theusr/azrak-launcher";
-const ASSET: &str = "azrak-linux-x86_64.tar.gz";
+const ASSET: &str = "swarmplay-linux-x86_64.tar.gz";
 const CHECK_INTERVAL: f64 = 6.0 * 3600.0;
 
 #[derive(Clone, Debug)]
@@ -30,7 +30,9 @@ pub struct Release {
 
 /// Version of the running binary. `AZRAK_PRETEND_VERSION` exists for testing updates.
 /// The menu icon install.sh puts in place.
-pub const ICON: &[u8] = include_bytes!("../assets/azrak.svg");
+/// The menu icon's name (the data folders keep upstream's "azrak": see util::APP_NAME).
+pub const ICON_NAME: &str = "swarmplay";
+pub const ICON: &[u8] = include_bytes!("../assets/swarmplay.svg");
 
 /// Put the current menu icon in place of an older one. Automatic updates replace only the
 /// binary, so without this an updated launcher keeps the icon of the version first installed.
@@ -39,7 +41,7 @@ pub fn refresh_menu_icon() {
 
     let data = std::env::var_os("XDG_DATA_HOME").map(PathBuf::from).unwrap_or_else(|| crate::util::expand_home("~/.local/share"));
     let hicolor = data.join("icons").join("hicolor");
-    let path = hicolor.join("scalable").join("apps").join(format!("{}.svg", crate::util::APP_NAME));
+    let path = hicolor.join("scalable").join("apps").join(format!("{ICON_NAME}.svg"));
     match std::fs::read(&path) {
         Ok(old) if old != ICON => {}
         _ => return,
@@ -123,16 +125,16 @@ pub fn install(rel: &Release, exe: &Path, progress: &dyn Fn(String, f32)) -> Res
         let pct = if total > 0 { done * 100 / total } else { 0 };
         if pct != last.get() {
             last.set(pct);
-            progress(format!("Downloading Azrak Launcher {} · {pct}%", rel.version), pct as f32 / 100.0);
+            progress(format!("Downloading SwarmPlay {} · {pct}%", rel.version), pct as f32 / 100.0);
         }
     });
     if let Err(e) = res {
         cleanup();
         return Err(e);
     }
-    progress(format!("Installing Azrak Launcher {}…", rel.version), 1.0);
+    progress(format!("Installing SwarmPlay {}…", rel.version), 1.0);
     let ok = Command::new("tar").arg("-xzf").arg(&archive).arg("-C").arg(&work).status().is_ok_and(|s| s.success());
-    let new_bin = work.join("azrak-linux-x86_64").join("azrak");
+    let new_bin = work.join("swarmplay-linux-x86_64").join("swarmplay");
     if !ok || !new_bin.is_file() {
         cleanup();
         return Err("could not unpack the update".into());
@@ -152,7 +154,7 @@ pub fn install(rel: &Release, exe: &Path, progress: &dyn Fn(String, f32)) -> Res
     let r = std::fs::rename(&staged, exe).map_err(|e| e.to_string());
     cleanup();
     r?;
-    crate::log!("Azrak Launcher updated to {}", rel.version);
+    crate::log!("SwarmPlay updated to {}", rel.version);
     Ok(())
 }
 

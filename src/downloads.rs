@@ -991,7 +991,7 @@ impl Worker {
             let (total, files, padding) = inspect_metadata(&resolved.bytes, &job.key, None)?;
             // Nothing is downloaded yet: a release the launcher couldn't install stops here.
             if let Some(why) = job.platform.and_then(|platform| crate::package::unsupported(platform, &files.iter().zip(&padding).filter(|(_, pad)| !**pad).map(|(file, _)| file.clone()).collect::<Vec<_>>())) {
-                let why = anyhow::anyhow!("Azrak can't install this release: {why}. Nothing was downloaded; choose another release of this game.");
+                let why = anyhow::anyhow!("SwarmPlay can't install this release: {why}. Nothing was downloaded; choose another release of this game.");
                 return Err(LookupError(Problem::Unsupported, why).into());
             }
             let entries = entries_of(job.platform, files, padding);

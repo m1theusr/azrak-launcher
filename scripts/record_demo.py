@@ -51,7 +51,7 @@ class Session:
         self.work = work
         self.home = work / "home"
         self.log_path = work / "launcher.log"
-        self.binary = work / "bin" / "azrak"  # copied: keeps the demo away from real installs
+        self.binary = work / "bin" / "swarmplay"  # copied: keeps the demo away from real installs
         self.binary.parent.mkdir(parents=True)
         shutil.copy2(binary, self.binary)
         cfg = self.home / ".config" / "azrak"
@@ -439,7 +439,7 @@ def encode_loop(loop: Path, out: Path):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--binary", type=Path, default=ROOT / "target" / "release" / "azrak")
+    ap.add_argument("--binary", type=Path, default=ROOT / "target" / "release" / "swarmplay")
     ap.add_argument("--game", type=Path, help="an installed game folder (with sce_sys/param.json) to show as installed")
     ap.add_argument("--out", type=Path, default=ROOT / "dist" / "demo")
     ap.add_argument("--keep", action="store_true", help="keep the temporary work folder")

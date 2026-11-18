@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-22.04
     env:
       TAG: ${{ github.event.release.tag_name || inputs.tag }}
-      NAME: azrak-linux-x86_64
+      NAME: swarmplay-linux-x86_64
     steps:
       - uses: actions/checkout@v5
         with:
@@ -38,8 +38,8 @@ jobs:
         run: |
           node --test scripts/package-licenses.test.mjs
           mkdir -p "dist/$NAME/assets"
-          cp target/release/azrak install.sh README.md "dist/$NAME/"
-          cp assets/azrak.svg "dist/$NAME/assets/"
+          cp target/release/swarmplay install.sh README.md "dist/$NAME/"
+          cp assets/swarmplay.svg "dist/$NAME/assets/"
           node scripts/package-licenses.mjs "dist/$NAME" --allow-upstream
           tar -C dist -czf "dist/$NAME.tar.gz" "$NAME"
           (cd dist && sha256sum "$NAME.tar.gz" > "$NAME.tar.gz.sha256")

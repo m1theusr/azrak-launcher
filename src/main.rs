@@ -52,10 +52,10 @@ mod words;
 slint::include_modules!();
 
 const HELP: &str = "\
-Azrak Launcher — a console-style game launcher for Linux
+SwarmPlay — a console-style game launcher for Linux
 
 USAGE:
-    azrak [OPTIONS]
+    swarmplay [OPTIONS]
 
 OPTIONS:
     --windowed          Open in a normal window instead of fullscreen
@@ -96,7 +96,7 @@ fn main() {
             }
             "--sync" => force_sync = true,
             "--version" | "-V" => {
-                println!("azrak {}", env!("CARGO_PKG_VERSION"));
+                println!("swarmplay {}", env!("CARGO_PKG_VERSION"));
                 return;
             }
             "-h" | "--help" => {
