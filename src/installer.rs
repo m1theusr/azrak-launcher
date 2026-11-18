@@ -275,6 +275,8 @@ struct Dir(File);
 impl Dir {
     fn absolute(path: &Path, create: bool) -> Result<Self> {
         ensure!(path.is_absolute(), "Absolute path required");
+        ensure!(path.components().all(|c| matches!(c, Component::RootDir | Component::Normal(_))), "Unsafe filesystem path: {}", path.display());
+        let path = &system_resolved(path)?;
         let root = CString::new("/").unwrap();
         let fd = unsafe { libc::open(root.as_ptr(), libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC | libc::O_RDONLY) };
         ensure!(fd >= 0, "Open root: {}", std::io::Error::last_os_error());
@@ -346,6 +348,51 @@ impl Dir {
         ensure!(r == 0, "Inspect source: {}", std::io::Error::last_os_error());
         Ok(unsafe { st.assume_init() })
     }
+}
+
+/// `path` with the system's own links on the way followed: Fedora Atomic's and Bazzite's
+/// `/home -> var/home` (so `$HOME` is `/home/<user>` but nothing under it opens without links),
+/// a `/mnt` or `/media` link, and so on. Only a link owned by root, in a folder owned by root
+/// that no one else can write to, is followed: no user could have placed or swapped it, so it's
+/// as safe as the folder itself. Any other link is left in the path for `Dir` to refuse.
+fn system_resolved(path: &Path) -> Result<PathBuf> {
+    use std::collections::VecDeque;
+    use std::ffi::OsString;
+    enum Step { Name(OsString), Up }
+    let steps = |p: &Path| -> Vec<Step> {
+        p.components().filter_map(|c| match c {
+            Component::Normal(n) => Some(Step::Name(n.to_os_string())),
+            Component::ParentDir => Some(Step::Up),
+            _ => None,
+        }).collect()
+    };
+    let mut rest: VecDeque<Step> = steps(path).into();
+    let mut resolved = PathBuf::from("/");
+    let mut links = 0;
+    while let Some(step) = rest.pop_front() {
+        let name = match step {
+            Step::Up => { resolved.pop(); continue; }
+            Step::Name(name) => name,
+        };
+        let next = resolved.join(&name);
+        let trusted = match fs::symlink_metadata(&next) {
+            Ok(link) if link.file_type().is_symlink() => {
+                let folder = fs::symlink_metadata(&resolved)?;
+                link.uid() == 0 && folder.uid() == 0 && folder.mode() & 0o022 == 0
+            }
+            _ => false,
+        };
+        if !trusted {
+            resolved = next;
+            continue;
+        }
+        links += 1;
+        ensure!(links <= 40, "Too many links in {}", path.display());
+        let target = fs::read_link(&next)?;
+        if target.is_absolute() { resolved = PathBuf::from("/"); }
+        for step in steps(&target).into_iter().rev() { rest.push_front(step); }
+    }
+    Ok(resolved)
 }
 
 fn component(name: &[u8]) -> Result<CString> {
@@ -2472,5 +2519,40 @@ mod tests {
         assert!(plan.add(Entry::file("sce_sys/param.json".into(), false, MAX_PARAM+1)).is_err());
         assert!(Plan::default().add(Entry::file("large".into(), false, MAX_FILE+1)).is_err());
         assert!(normal_path(&"a/".repeat(MAX_DEPTH+1)).is_err());
+    }
+}
+#[cfg(test)]
+mod link_tests {
+    use super::*;
+
+    #[test]
+    fn system_links_on_the_way_are_followed() {
+        // /proc/self is root's link in root's /proc, like Bazzite's /home -> var/home.
+        // In a container's user namespace (distrobox, toolbox) /proc shows as nobody's, not
+        // root's, so there it rightly stays unresolved.
+        let pid = std::process::id().to_string();
+        let resolved = system_resolved(Path::new("/proc/self/fd")).unwrap();
+        if fs::symlink_metadata("/proc/self").unwrap().uid() == 0 && fs::metadata("/proc").unwrap().uid() == 0 {
+            assert_eq!(resolved, Path::new("/proc").join(&pid).join("fd"));
+            assert!(Dir::absolute(Path::new("/proc/self"), false).is_ok());
+        } else {
+            assert_eq!(resolved, Path::new("/proc/self/fd"));
+        }
+        // And a path without links is left as it is.
+        let tmp = tempfile::tempdir().unwrap();
+        let real = fs::canonicalize(tmp.path()).unwrap();
+        assert_eq!(system_resolved(&real.join("game")).unwrap(), real.join("game"));
+    }
+
+    #[test]
+    fn links_a_user_could_place_are_still_refused() {
+        let tmp = tempfile::tempdir().unwrap();
+        let real = fs::canonicalize(tmp.path()).unwrap();
+        fs::create_dir(real.join("elsewhere")).unwrap();
+        std::os::unix::fs::symlink(real.join("elsewhere"), real.join("link")).unwrap();
+        assert_eq!(system_resolved(&real.join("link/game")).unwrap(), real.join("link/game"));
+        assert!(Dir::absolute(&real.join("link"), false).is_err());
+        assert!(Dir::absolute(&real.join("link/game"), true).is_err());
+        assert!(!real.join("elsewhere/game").exists());
     }
 }
