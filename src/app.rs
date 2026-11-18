@@ -114,7 +114,9 @@ pub const GENRES: [(&str, &str); 16] = [
 ];
 
 
-pub const SORTS: [&str; 7] = ["Newest uploads", "Name (A–Z)", "Release date", "Top rated", "Size (largest)", "Size (smallest)", "Compatibility"];
+pub const SORTS: [&str; 8] = ["Newest uploads", "Name (A–Z)", "Release date", "Top rated", "Size (largest)", "Size (smallest)", "Compatibility", "Most seeders"];
+/// Status filters the Library remembers.
+const STATUS_FILTERS: [&str; 3] = ["All", "Installed", "Playable"];
 
 /// A catalog game plus derived data.
 pub struct GameV {
@@ -609,9 +611,9 @@ pub fn run(ui: AppWindow, monitors: Vec<Monitor>, target_monitor: Option<Monitor
         search_note: String::new(),
         hits: Default::default(),
         genre: "All".into(),
-        status_filter: "All".into(),
+        status_filter: { let c = cfg.lock().unwrap(); STATUS_FILTERS.iter().find(|s| **s == c.library_status).unwrap_or(&"All").to_string() },
         genre_list: Vec::new(),
-        sort: 0,
+        sort: cfg.lock().unwrap().library_sort.min(SORTS.len() - 1),
         query: String::new(),
         search_editing: false,
         cols: 7,
@@ -1091,10 +1093,8 @@ impl App {
         let mut list: Vec<(String, usize)> = vec![("All".into(), members.len())];
         let installed = members.iter().filter(|members| members.iter().any(|i| self.games[*i].local.is_some())).count();
         list.push(("Installed".into(), installed));
-        let count = |f: &dyn Fn(&crate::compat::Entry) -> bool| members.iter()
-            .filter(|members| members.iter().any(|i| self.game_compat(&self.games[*i]).is_some_and(f))).count();
-        // Linux results only: the launcher runs on Linux.
-        list.push(("Playable".into(), count(&|e| e.in_game())));
+        let playable = members.iter().filter(|members| members.iter().any(|i| self.playable(&self.games[*i]))).count();
+        list.push(("Playable".into(), playable));
         use crate::platform::Platform;
         self.consoles = [Platform::Ps5, Platform::Ps4, Platform::Pc].into_iter()
             .filter(|p| self.games.iter().any(|g| g.g.platform == *p)).collect();
@@ -1160,9 +1160,15 @@ impl App {
             4 => list.sort_by(|a, b| gs[*b].g.size_gb.unwrap_or(-1.0).partial_cmp(&gs[*a].g.size_gb.unwrap_or(-1.0)).unwrap_or(std::cmp::Ordering::Equal)),
             5 => list.sort_by(|a, b| gs[*a].g.size_gb.unwrap_or(1e9).partial_cmp(&gs[*b].g.size_gb.unwrap_or(1e9)).unwrap_or(std::cmp::Ordering::Equal)),
             6 => {
-                // Linux results best first, then results from other OSes, untested last; ties by name.
+                // Linux results best first, then results from other OSes, untested last; ties: the
+                // most shared first (quickest to download), then by name.
                 let rank = |i: usize| self.game_compat(&gs[i]).map(|e| e.status as u8 + if e.on_linux { 0 } else { 4 }).unwrap_or(9);
-                list.sort_by_cached_key(|i| (rank(*i), self.game_title(*i).to_lowercase()))
+                list.sort_by_cached_key(|i| (rank(*i), std::cmp::Reverse(gs[*i].g.seeders), self.game_title(*i).to_lowercase()))
+            }
+            7 => {
+                // Most people sharing first (unknown counts last); ties: better compatibility, then name.
+                let rank = |i: usize| self.game_compat(&gs[i]).map(|e| e.status as u8 + if e.on_linux { 0 } else { 4 }).unwrap_or(9);
+                list.sort_by_cached_key(|i| (std::cmp::Reverse(gs[*i].g.seeders), rank(*i), self.game_title(*i).to_lowercase()))
             }
             _ => {
                 let newest = |i: usize| self.groups.releases(i).iter().map(|index| gs[*index].g.id).max().unwrap_or(gs[i].g.id);
@@ -2352,6 +2358,7 @@ impl App {
                         }
                         else if self.idx < n { self.status_filter = g; }
                         else { self.genre = if g == "All genres" { "All".into() } else { g }; }
+                        self.remember_library_view();
                         self.apply_filter();
                         self.set_grid_scroll(0.0, 0);
                         self.push_library();
@@ -2399,7 +2406,24 @@ impl App {
     /// The status filter alone (Installed, Playable, …), whatever the console.
     pub fn status_filter_ok(&self, game: &GameV) -> bool {
         self.status_filter == "All" || (self.status_filter == "Installed" && game.local.is_some())
-            || (self.status_filter == "Playable" && self.game_compat(game).is_some_and(|entry| entry.in_game()))
+            || (self.status_filter == "Playable" && self.playable(game))
+    }
+
+    /// Whether "Playable" lists it: a console game the emulators' lists say plays on Linux, or any
+    /// PC game (no emulator: those lists don't cover them, and hiding them all would be wrong).
+    pub fn playable(&self, game: &GameV) -> bool {
+        game.g.platform == crate::platform::Platform::Pc || self.game_compat(game).is_some_and(|entry| entry.in_game())
+    }
+
+    /// Keep the Library's sort and status filter for the next start.
+    pub fn remember_library_view(&self) {
+        let mut c = self.cfg.lock().unwrap();
+        let status = if STATUS_FILTERS.contains(&self.status_filter.as_str()) { self.status_filter.clone() } else { "All".into() };
+        if c.library_sort != self.sort || c.library_status != status {
+            c.library_sort = self.sort;
+            c.library_status = status;
+            c.save();
+        }
     }
 
     pub fn open_sort_picker(&mut self) {
@@ -2416,6 +2440,7 @@ impl App {
             Act::Last => self.move_focus(Z_SORT_PICKER, SORTS.len() as i32 - 1),
             Act::Confirm if (0..SORTS.len() as i32).contains(&self.idx) => {
                 self.sort = self.idx as usize;
+                self.remember_library_view();
                 self.back();
                 self.apply_filter();
                 self.set_grid_scroll(0.0, 0);

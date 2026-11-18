@@ -1072,6 +1072,7 @@ impl App {
 
     pub fn cycle_sort(&mut self, d: i32) {
         self.sort = (self.sort as i32 + d).rem_euclid(SORTS.len() as i32) as usize;
+        self.remember_library_view();
         audio_move();
         self.apply_filter();
         self.set_grid_scroll(0.0, 0);
