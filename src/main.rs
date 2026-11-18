@@ -20,6 +20,7 @@ mod pc_ui;
 mod pcgame;
 mod os;
 mod exfat;
+mod control_center;
 mod pfs;
 mod rar;
 mod package;

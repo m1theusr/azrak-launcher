@@ -445,16 +445,13 @@ impl Sessions {
         pids.into_iter().any(activate_pid_window)
     }
 
-    /// PS button: toggle between the game and the launcher.
-    pub fn toggle_focus(&self) {
+    /// A running game's window is the one in front (in Gamescope too, where the launcher's own
+    /// window never learns it lost focus).
+    pub fn game_in_front(&self) -> bool {
         let pids: Vec<u32> = self.inner.lock().unwrap().live.iter().map(|s| s.pid).collect();
+        if pids.is_empty() { return false; }
         let active = active_window_pid();
-        let in_game = active != 0 && pids.iter().any(|p| *p == active || group_members(*p).contains(&active));
-        if pids.is_empty() || in_game {
-            show_launcher();
-        } else {
-            self.resume();
-        }
+        active != 0 && pids.iter().any(|p| *p == active || group_members(*p).contains(&active))
     }
 
     /// Returns true if anything changed.

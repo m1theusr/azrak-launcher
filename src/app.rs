@@ -49,6 +49,7 @@ pub const Z_VERSIONS: i32 = 24;
 pub const Z_SETUP: i32 = 25;
 /// Settings' left column: its sections, and Quit under them.
 pub const Z_SETTINGS_NAV: i32 = 26;
+pub const Z_CONTROL_CENTER: i32 = 27;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Overlay {
@@ -72,6 +73,8 @@ pub enum Overlay {
     SearchKeys = 14,
     /// Download & install: the files to get and where they go (setup_ui.rs).
     Setup = 15,
+    /// Guide's panel: the running game, downloads, quick ways around (control_center.rs).
+    ControlCenter = 16,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -819,6 +822,7 @@ impl App {
 fn wire_callbacks(ui: &AppWindow) {
     ui.on_key(|text, ctrl, alt, repeat| with_app_ret(|app| app.on_key(&text, ctrl, alt, repeat)));
     ui.on_click(|zone, idx| with_app(move |app| app.on_click(zone, idx)));
+    ui.set_on_os(crate::os::system::on_os());
     ui.on_hover(|zone, idx| with_app(move |app| app.on_hover(zone, idx)));
     ui.on_row_wheel(|d| {
         with_app(move |app| {
@@ -1856,7 +1860,16 @@ impl App {
 
     pub fn on_pad(&mut self, p: Pad) {
         if p == Pad::Ps {
-            self.sessions.toggle_focus();
+            // Guide opens the Control Center: over the launcher, or, from a game, bringing the
+            // launcher up first ("Back to game" returns to it).
+            if self.sessions.game_in_front() {
+                crate::sessions::show_launcher();
+                if self.overlay == Overlay::ControlCenter { return; }
+            } else if !crate::display::window_has_focus(&self.ui()) {
+                // Another app is in front: bring the launcher up, as Guide always did.
+                crate::sessions::show_launcher();
+            }
+            self.toggle_control_center();
             return;
         }
         if !crate::display::window_has_focus(&self.ui()) {
@@ -1985,6 +1998,10 @@ impl App {
         }
         if ctrl && text == "d" && !self.boot.active {
             self.open_downloads(None);
+            return true;
+        }
+        if k(Key::F1) {
+            self.toggle_control_center();
             return true;
         }
         if ctrl || alt {
@@ -2203,6 +2220,7 @@ impl App {
             Overlay::WifiJoin => self.act_wifi_join(a),
             Overlay::SearchKeys => self.act_search_keys(a),
             Overlay::Power => self.act_power(a),
+            Overlay::ControlCenter => self.act_control_center(a),
             Overlay::Settings if self.zone == Z_SETTINGS_NAV => self.act_settings_nav(a),
             Overlay::Settings => self.act_settings_rows(a),
             Overlay::Hub => self.act_hub(a),
