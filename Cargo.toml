@@ -53,3 +53,17 @@ panic = "unwind"
 # Decoding images in debug builds is painfully slow; optimize dependencies even there.
 [profile.dev.package."*"]
 opt-level = 2
+
+# For working on the launcher (scripts/check.sh): our code builds fast and incrementally,
+# the libraries stay fully optimised (built once), and the tests share them.
+[profile.quick]
+inherits = "release"
+opt-level = 1
+lto = false
+codegen-units = 64
+incremental = true
+strip = false
+
+[profile.quick.package."*"]
+opt-level = 3
+codegen-units = 16

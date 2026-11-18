@@ -51,12 +51,24 @@ Git identity in this repo: `Matheus Martucci Rodrigues <88255921+m1theusr@users.
 
 ## Build and test
 
+While working, one command builds, runs the tests and shoots the screens (tests and screens side by
+side), in about 2 minutes; an edit rebuilds in ~15 s:
+
 ```bash
-cd ~/Projects/azrak-launcher
-distrobox enter azrak-dev -- bash -lc 'cd ~/Projects/azrak-launcher && ~/.cargo/bin/cargo test --release --locked && ~/.cargo/bin/cargo build --release --locked'
+distrobox enter azrak-dev -- bash -c 'cd ~/Projects/azrak-launcher && scripts/check.sh'   # or: scripts/check.sh 1280x720 1920x1080
 ```
 
-Run the full test suite before installing; report failures with their output, never install a build whose tests fail.
+It uses the `quick` profile (Cargo.toml: light optimisation for our code, libraries fully optimised
+and built once, shared with the tests) and links with mold (`sudo apt install mold` in the box).
+Group a whole area's work in one PR and run this once at the end, not after every step.
+
+Only the build to install is a release build (~3 min), once per PR, after check.sh passed:
+
+```bash
+distrobox enter azrak-dev -- bash -c 'cd ~/Projects/azrak-launcher && ~/.cargo/bin/cargo build --release --locked'
+```
+
+Report test failures with their output; never install a build whose tests fail.
 
 ## Install (or reinstall) the build
 
@@ -102,8 +114,9 @@ Publishing is outward-facing: ask the user first.
 
 Never call a UI change done without looking at it. `scripts/ui_matrix.py` runs the real launcher on a
 hidden X display with a throwaway home seeded from `~/.cache/azrak` and shoots 12 screens to
-`dist/ui-matrix/<size>/`. Run it in the box, built first (`cargo build --release`), WITHOUT the host's
-Wayland variables, or winit opens the window on the user's real desktop instead of Xvfb:
+`dist/ui-matrix/<size>/` (check.sh runs it on the quick build; `SWARMPLAY_BIN` picks the binary,
+the release one by default). Run it in the box WITHOUT the host's Wayland variables, or winit opens
+the window on the user's real desktop instead of Xvfb:
 
 ```bash
 distrobox enter azrak-dev -- env -u WAYLAND_DISPLAY python3 ~/Projects/azrak-launcher/scripts/ui_matrix.py 1920x1080

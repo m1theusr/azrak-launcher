@@ -125,7 +125,8 @@ def shoot(size: str, n: int, out: Path, binary: Path, game: Path | None):
 
 def main():
     sizes = sys.argv[1:] or SIZES
-    binary = ROOT / "target/release/swarmplay"
+    # scripts/check.sh shoots the quick build; by itself, the release one.
+    binary = Path(os.environ.get("SWARMPLAY_BIN", ROOT / "target/release/swarmplay"))
     out = ROOT / "dist/ui-matrix"
     out.mkdir(parents=True, exist_ok=True)
     game = Path(os.environ["DEMO_GAME"]) if os.environ.get("DEMO_GAME") else None
