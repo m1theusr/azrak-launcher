@@ -45,6 +45,10 @@ pub enum SId {
     AutoUpdate,
     KytyRollback,
     ShadRollback,
+    // Theme (src/theme.rs)
+    ThemeWallpaper,
+    ThemeImage,
+    ThemeAccent,
     // Launcher
     Display,
     Sounds,
@@ -268,6 +272,9 @@ impl App {
             rows.push((SId::ShadRollback, r));
         }
 
+        header(&mut rows, "THEME");
+        rows.extend(self.theme_rows());
+
         header(&mut rows, "LAUNCHER");
         let mut r = row(3, "Display");
         r.value = match self.monitors.iter().find(|m| m.name == cfg.monitor) {
@@ -405,12 +412,18 @@ impl App {
                 if self.upd.installed.is_some() { ("Restart".to_string(), 2) }
                 else if ready > 0 { (format!("{ready} ready"), 2) } else { (String::new(), 0) }
             }),
+            "THEME" => ("Wallpaper and accent colour", (String::new(), 0)),
             "LAUNCHER" => ("Display, sounds and your game ratings", (String::new(), 0)),
             "ADVANCED" => ("KytyPS5 location and video options, the game catalog", (String::new(), 0)),
             _ => ("", (String::new(), 0)),
         };
         let sub = if header == "ABOUT" { format!("SwarmPlay {}", crate::update::current_version()) } else { sub.to_string() };
-        SettingSection { label: label.into(), sub: sub.into(), note: note.into(), note_kind }
+        // Its icon on the first page (ui/theme.slint Icons.get).
+        let icon = match header {
+            "SYSTEM" => "wifi", "GAMES" => "grid", "PLAYING" => "gamepad", "DOWNLOADS" => "disk",
+            "UPDATES" => "retry", "THEME" => "palette", "LAUNCHER" => "gear", "ADVANCED" => "log", _ => "info",
+        };
+        SettingSection { label: label.into(), sub: sub.into(), note: note.into(), note_kind, icon: icon.into() }
     }
 
     /// The launcher's version and whether it's up to date, under the sections.
@@ -436,6 +449,7 @@ impl App {
     /// Focus a row, showing its section.
     pub fn focus_setting_row(&mut self, i: usize) {
         if let Some(s) = self.settings_rows.get(i).map(|r| r.section).filter(|s| *s >= 0) {
+            self.set_settings_root(false);
             self.settings_section = s as usize;
             self.set_focus(Z_SETTINGS, i as i32);
             self.push_settings_nav();
@@ -475,18 +489,30 @@ impl App {
         ui.set_settings_glass(glass.unwrap_or_default());
     }
 
+    /// The first page (the list of sections, Quit under them) or a section's page.
+    pub fn set_settings_root(&mut self, on: bool) {
+        self.settings_root = on;
+        self.ui().set_settings_root(on);
+    }
+
     pub fn act_settings_nav(&mut self, a: Act) {
         let n = self.settings_sections.len();
         let footer = self.settings_footer();
         let i = self.idx.max(0) as usize;
+        // A section's page lists the sections only; the first page has Quit under them too.
+        let last = if self.settings_root { n + footer.len() } else { n };
         match a {
+            // Back from a section's page is its first page; from there it closes.
+            Act::Back if !self.settings_root => { audio::play(Sound::Back); self.set_settings_root(true); }
             Act::Back => self.back(),
             Act::Up if i > 0 => { audio::play(Sound::Move); self.focus_settings_nav(i - 1); }
-            Act::Down if i + 1 < n + footer.len() => { audio::play(Sound::Move); self.focus_settings_nav(i + 1); }
+            Act::Down if i + 1 < last => { audio::play(Sound::Move); self.focus_settings_nav(i + 1); }
             Act::Right | Act::Confirm if i < n => {
-                if let Some(&j) = self.section_rows().first() {
-                    audio::play(Sound::Move);
-                    self.focus_setting_row(j);
+                audio::play(Sound::Select);
+                match self.section_rows().first() {
+                    Some(&j) => self.focus_setting_row(j),
+                    // About: its page, nothing to choose on it.
+                    None => self.set_settings_root(false),
                 }
             }
             Act::Confirm => {
@@ -502,10 +528,11 @@ impl App {
         let kind = self.settings_rows.get(self.idx.max(0) as usize).map_or(0, |r| r.kind);
         let to_nav = |app: &mut App| { audio::play(Sound::Back); let s = app.settings_section; app.focus_settings_nav(s); };
         match a {
-            // Back leaves the rows for their section; Back there closes Settings. Opened onto a
-            // row from elsewhere (VPN settings on Downloads), Back goes straight back there.
+            // Back leaves a section's page for the first page; Back there closes Settings.
+            // Opened onto a row from elsewhere (VPN settings on Downloads), Back goes straight
+            // back there.
             Act::Back if self.settings_direct => self.back(),
-            Act::Back => to_nav(self),
+            Act::Back => { to_nav(self); self.set_settings_root(true); }
             Act::Up | Act::Down => {
                 let next = match (pos, a) {
                     (Some(p), Act::Up) => p.checked_sub(1),
@@ -629,6 +656,10 @@ impl App {
         if self.system_change(id, dir) {
             return;
         }
+        if self.theme_change(id, dir) {
+            audio::play(Sound::Move);
+            return self.refresh_settings();
+        }
         match id {
             SId::Resolution => {
                 let cur = { let c = self.cfg.lock().unwrap(); (c.width, c.height) };
@@ -703,9 +734,11 @@ impl App {
             return;
         }
         match id {
-            SId::Emulator | SId::Dirs | SId::Extra | SId::DownloadDir | SId::InstallDir => {
+            SId::Emulator | SId::Dirs | SId::Extra | SId::DownloadDir | SId::InstallDir | SId::ThemeImage => {
                 let cfg = self.cfg.lock().unwrap().clone();
                 let text = match id {
+                    SId::ThemeImage if cfg.theme_image.is_empty() => "~/Pictures/".into(),
+                    SId::ThemeImage => cfg.theme_image,
                     SId::Emulator => cfg.emulator,
                     SId::Dirs => cfg.game_dirs.join("; "),
                     SId::Extra => cfg.extra_args,
@@ -723,7 +756,7 @@ impl App {
                 let on = self.settings_rows[i].on;
                 self.settings_change(i, if on { -1 } else { 1 });
             }
-            SId::Resolution | SId::Present | SId::Display => self.settings_change(i, 1),
+            SId::Resolution | SId::Present | SId::Display | SId::ThemeWallpaper | SId::ThemeAccent => self.settings_change(i, 1),
             SId::KytyUpdate => {
                 audio::play(Sound::Select);
                 if self.kyty.busy || self.kyty.checking {
@@ -835,6 +868,9 @@ impl App {
                 self.note_setting(SId::Dirs, &format!("{} found", plural(n, "installed game")), 1);
             }
             SId::Extra => self.save_cfg(|c| c.extra_args = t),
+            // Left as it opened: nothing chosen.
+            SId::ThemeImage if t == "~/Pictures/" => {}
+            SId::ThemeImage => self.theme_image_typed(&t),
             // Left as it opened: nothing chosen. A folder: not the file yet.
             SId::VpnAdd if t == "~/Downloads/" => {}
             SId::VpnAdd if util::expand_home(&t).is_dir() => {

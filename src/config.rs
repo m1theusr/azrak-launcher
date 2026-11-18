@@ -41,6 +41,11 @@ pub struct Config {
     /// "Playable"), as last chosen.
     pub library_sort: usize,
     pub library_status: String,
+    /// Settings → Theme (src/theme.rs): the wallpaper, the picture for "Your image" and the
+    /// accent colour, by name.
+    pub theme_wallpaper: String,
+    pub theme_image: String,
+    pub theme_accent: String,
 }
 
 impl Default for Config {
@@ -69,6 +74,9 @@ impl Default for Config {
             recent_searches: Vec::new(),
             library_sort: 0,
             library_status: "All".into(),
+            theme_wallpaper: "Game art".into(),
+            theme_image: String::new(),
+            theme_accent: "Blue".into(),
         }
     }
 }

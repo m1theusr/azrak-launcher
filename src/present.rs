@@ -1388,7 +1388,20 @@ impl App {
             // At the bottom already: don't let further presses build up.
             self.idx = ((max - about) / 360.0).ceil().max(0.0) as i32;
         }
+        ui.set_hub_glide(420);
         ui.set_hub_y(-y.clamp(0.0, max) * self.scale);
+    }
+
+    /// The wheel or a touchpad over the Hub's page: a notch glides a step, a touchpad follows.
+    pub fn hub_wheel(&mut self, dy: f32) {
+        if dy == 0.0 { return; }
+        let ui = self.ui();
+        let notches = dy / 60.0;
+        let is_wheel = dy.abs() >= 59.0 && (notches - notches.round()).abs() < 0.01;
+        let step = if is_wheel { notches * 160.0 * self.scale } else { dy };
+        let max = (ui.get_hub_content_h() - ui.get_hub_view_h()).max(0.0);
+        ui.set_hub_glide(if is_wheel { 220 } else { 0 });
+        ui.set_hub_y((ui.get_hub_y() + step).clamp(-max, 0.0));
     }
 
     /// The viewer's full-size copies of the selected screenshot and the next one.

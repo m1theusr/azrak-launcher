@@ -66,6 +66,22 @@ component HeroView inherits Rectangle {
     }
 }
 
+// A theme's wallpaper (Settings → Theme): colour fields with a soft light, or your picture.
+component Wallpaper inherits Rectangle {
+    in property <int> kind;
+    in property <image> image;
+    background: kind == 2 ? @linear-gradient(170deg, #1b2140 0%, #0b0e1d 55%, #04050b 100%)
+        : kind == 3 ? @linear-gradient(135deg, #0f766e 0%, #1e3a8a 48%, #4c1d95 100%)
+        : kind == 4 ? @linear-gradient(135deg, #9a3412 0%, #9f1239 45%, #1e1b4b 100%)
+        : @linear-gradient(160deg, #0b4fd6 0%, #0a2a7a 45%, #030a24 100%);
+    if kind != 5: Rectangle {
+        background: @radial-gradient(circle, #ffffff2e 0%, #ffffff00 60%);
+        x: parent.width * 0.42; y: -parent.height * 0.35;
+        width: parent.width * 0.9; height: parent.height * 1.1;
+    }
+    if kind == 5: Image { source: root.image; width: parent.width; height: parent.height; image-fit: cover; }
+}
+
 export component AppWindow inherits Window {
     title: "SwarmPlay";
     icon: @image-url("../assets/icons/app-icon.svg");
@@ -210,15 +226,26 @@ export component AppWindow inherits Window {
     in property <bool> hub-open;
     // The Hub was opened from Home's cards: it rises from under Home, as the page scrolling on.
     in property <bool> hub-scrolled;
+    // The Hub waits to come in until it's at the section it opens on; it goes out before closing.
+    in property <bool> hub-ready: true;
+    in property <bool> hub-leaving;
+    // How long the Hub's page glides to where it's scrolled (0: follows a touchpad as it moves).
+    in property <duration> hub-glide: 420ms;
+    callback hub-wheel(float);
     // The Welcome tile is selected: its widgets (src/welcome.rs) show in place of a game's hero.
     in property <bool> home-welcome;
+    // Settings → Theme's wallpaper (src/theme.rs): 0 the game's art, else one of Wallpaper's.
+    in property <int> wallpaper-kind;
+    in property <image> wallpaper-image;
+    // Settings shows its first page (the list of sections), else a section's page.
+    in property <bool> settings-root: true;
     in property <[WidgetData]> welcome;
     callback home-wheel(float);
     // How far Home has scrolled up: enough to show the Hub's cards whole while one is chosen,
     // and on under the Hub that rises over it.
     property <length> home-lift: root.view != 0 ? 0
         : root.overlay == 0 && root.zone == Zone.home-peek ? (92px * S.k)
-        : root.hub-open && root.hub-scrolled ? root.height * 0.4
+        : root.hub-open && root.hub-scrolled ? (root.hub-leaving ? (92px * S.k) : root.height * 0.4)
         : 0;
     in property <bool> home-has-game: true;
     in-out property <length> hub-content-h;
@@ -410,6 +437,14 @@ export component AppWindow inherits Window {
             animate opacity { duration: 520ms; easing: ease-out-quad; }
             animate transform-scale { duration: root.bg-show-b ? 1600ms : 0ms; easing: ease-out-quint; }
         }
+        // The theme's wallpaper on Welcome (a game's tile always shows the game's art).
+        Wallpaper {
+            kind: root.wallpaper-kind;
+            image: root.wallpaper-image;
+            opacity: root.wallpaper-kind > 0 && root.view == 0 && root.home-welcome && root.overlay == 0 ? 1 : 0;
+            visible: self.opacity > 0;
+            animate opacity { duration: 420ms; easing: ease-out-quad; }
+        }
         Rectangle { background: @linear-gradient(90deg, #04060ef0 0%, #04060eb8 30%, #04060e2e 62%, #04060e00 80%); }
         Rectangle { background: @linear-gradient(0deg, #04060ef5 0%, #04060e59 38%, #04060e00 60%); }
         Rectangle { background: @linear-gradient(180deg, #04060ed9 0%, #04060e00 26%); }
@@ -465,7 +500,7 @@ export component AppWindow inherits Window {
                     Rectangle {
                         border-radius: (18px * S.k);
                         clip: true;
-                        background: t.welcome ? @linear-gradient(135deg, #0a3fb8 0%, #0a6cff 60%, #4d9bff 100%)
+                        background: t.welcome ? @linear-gradient(135deg, Theme.accent.darker(0.45) 0%, Theme.accent 60%, Theme.accent.brighter(0.35) 100%)
                             : t.special ? #ffffff1f : Theme.panel;
                         border-width: t.special ? 1px : 0;
                         border-color: Theme.line;
@@ -617,12 +652,12 @@ export component AppWindow inherits Window {
                     property <bool> shown: false;
                     init => { self.shown = true; }
                     opacity: self.shown ? 1 : 0;
-                    transform-scale: self.shown ? 1 : 0.94;
+                    transform-scale: !self.shown ? 0.94 : ta-w.pressed ? 0.97 : 1;
                     animate opacity { duration: 360ms; delay: i * 45ms; easing: ease-out-quad; }
-                    animate transform-scale { duration: 480ms; delay: i * 45ms; easing: ease-out-expo; }
+                    animate transform-scale { duration: 480ms; delay: ta-w.has-hover ? 0ms : i * 45ms; easing: ease-out-expo; }
                     Rectangle {
                         border-radius: (22px * S.k);
-                        background: widget.f ? #ffffff2b : #0a0f1d8c;
+                        background: widget.f ? #ffffff2b : ta-w.has-hover ? #ffffff1a : #0a0f1d8c;
                         border-width: 1px;
                         border-color: widget.f ? #ffffff00 : #ffffff1f;
                         animate background { duration: 200ms; }
@@ -664,7 +699,7 @@ export component AppWindow inherits Window {
                             }
                         }
                     }
-                    TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.welcome, i); } }
+                    ta-w := TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.welcome, i); } }
                 }
             }
             if root.home-peek.length > 0 && !root.home-welcome: HorizontalLayout {
@@ -677,13 +712,16 @@ export component AppWindow inherits Window {
                     property <bool> f: root.zone == Zone.home-peek && root.idx == i && root.overlay == 0;
                     // Equal columns, whatever their text.
                     width: (root.width - (192px * S.k) - (54px * S.k)) / 4;
-                    y: f ? -(14px * S.k) : 0;
+                    y: f ? -(14px * S.k) : ta-peek.has-hover ? -(6px * S.k) : 0;
+                    // Pressed in, then the Hub rises from it (and it rises with Home).
+                    transform-scale: ta-peek.pressed ? 0.97 : root.hub-open && root.hub-scrolled && f ? 1.03 : 1;
                     animate y { duration: 260ms; easing: ease-out-expo; }
+                    animate transform-scale { duration: 220ms; easing: ease-out-quad; }
                     // Glass over the game's art: lighter when chosen, with the ring (no halo, which
                     // would fill the card) around it.
                     Rectangle {
                         border-radius: (18px * S.k);
-                        background: peek-card.f ? #ffffff26 : #ffffff12;
+                        background: peek-card.f ? #ffffff26 : ta-peek.has-hover ? #ffffff1f : #ffffff12;
                         border-width: 1px;
                         border-color: peek-card.f ? #ffffff00 : #ffffff1f;
                         animate background { duration: 200ms; }
@@ -698,7 +736,7 @@ export component AppWindow inherits Window {
                         Text { text: p.key; font-size: (19px * S.k); font-weight: 600; color: Theme.text; overflow: elide; }
                         Text { text: p.value; font-size: (16px * S.k); color: Theme.text2; overflow: elide; }
                     }
-                    TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.home-peek, i); } }
+                    ta-peek := TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.home-peek, i); } }
                 }
             }
         }
@@ -1216,7 +1254,7 @@ export component AppWindow inherits Window {
                             FocusRing { w: parent.width; h: parent.height; on: av.f; radius: parent.width / 2; glow: false; }
                             Rectangle {
                                 border-radius: self.width / 2;
-                                background: @linear-gradient(135deg, #4d9bff 0%, #0a3fb8 100%);
+                                background: @linear-gradient(135deg, Theme.accent.brighter(0.35) 0%, Theme.accent.darker(0.45) 100%);
                                 border-width: ta-av.has-hover && !av.f ? (2px * S.k) : 0;
                                 border-color: #ffffffb3;
                                 Text { text: root.user-initial; font-size: (26px * S.k); font-weight: 600; color: #ffffff; }
@@ -1364,11 +1402,13 @@ export component AppWindow inherits Window {
             background: Theme.bg;
             property <bool> entered: false;
             init => { entered = true; }
-            opacity: entered ? 1 : 0;
+            // In once it's at the section it opens on (no jump after), out the way it came.
+            property <bool> shown: entered && root.hub-ready && !root.hub-leaving;
+            opacity: shown ? 1 : 0;
             // From Home's cards it rises from below, as the page scrolling on.
-            y: entered || !root.hub-scrolled ? 0 : root.height * 0.4;
-            animate opacity { duration: 240ms; easing: ease-out-quad; }
-            animate y { duration: 460ms; easing: ease-out-expo; }
+            y: shown || !root.hub-scrolled ? 0 : root.height * 0.4;
+            animate opacity { duration: root.hub-leaving ? 200ms : 300ms; easing: ease-out-quad; }
+            animate y { duration: root.hub-leaving ? 260ms : 560ms; easing: ease-out-expo; }
             Image {
                 source: root.bg-show-b ? root.bg-b : root.bg-a;
                 width: root.width;
@@ -1381,8 +1421,10 @@ export component AppWindow inherits Window {
 
             // Scroll areas crop their content, so they start `gutter` before the content: a selected
             // button's grow + glow must never be cut off at the edge.
-            hub-flick := Flickable {
+            // The page scrolls from Rust (keys, wheel, touchpad) and glides there, as Home does.
+            hub-flick := Rectangle {
                 property <length> col-h: hub-col.height;
+                property <length> content-height: hub-col.preferred-height + (200px * S.k);
                 init => { root.hub-content-h = self.content-height; root.hub-col-h = self.col-h; }
                 changed content-height => { root.hub-content-h = self.content-height; }
                 changed col-h => { root.hub-col-h = self.col-h; }
@@ -1390,11 +1432,16 @@ export component AppWindow inherits Window {
                 x: (96px * S.k) - self.gutter;
                 width: root.width - (96px * S.k) - (60px * S.k) + self.gutter;
                 height: root.height;
-                content-y <=> root.hub-y;
-                content-height: hub-col.preferred-height + (200px * S.k);
+                TouchArea {
+                    scroll-event(e) => {
+                        root.hub-wheel(e.delta-y / 1px);
+                        return EventResult.accept;
+                    }
+                }
                 hub-col := VerticalLayout {
                     x: parent.gutter;
-                    y: 0;
+                    y: root.hub-y;
+                    animate y { duration: root.hub-glide; easing: ease-out-quart; }
                     width: root.hub-text-w;
                     height: self.preferred-height;
                     padding-top: (130px * S.k);
@@ -1605,6 +1652,7 @@ export component AppWindow inherits Window {
                                 height: parent.height;
                                 interactive: false;
                                 content-x: root.shots-x;
+                                animate content-x { duration: 340ms; easing: ease-out-quart; }
                                 content-width: root.hub.shots.length * (424px * S.k) + (72px * S.k);
                                 for s[i] in root.hub.shots: Rectangle {
                                     x: (30px * S.k) + i * (424px * S.k);
@@ -1720,145 +1768,156 @@ export component AppWindow inherits Window {
         }
 
         // ------------------------------------------------------------ SETTINGS
-        // A glass sheet over Home: sections on the left, the chosen one's rows on the right. Also
-        // behind the cards opened from it (Join Wi-Fi, Restart now?), so it's clear where they
-        // lead back to.
+        // The whole screen, as a console's: first the sections as one list (Quit under them),
+        // then a section's page (the sections on the left, its rows on the right). Also behind
+        // the cards opened from it (Join Wi-Fi, Restart now?), so it's clear where they lead back.
         if root.overlay == 2 || root.overlay == 12 || root.overlay == 13: Rectangle {
             property <bool> entered: false;
             property <bool> in-rows: root.zone == Zone.settings;
             init => { entered = true; }
-            background: entered ? #05070f73 : #05070f00;
-            animate background { duration: 260ms; }
-            TouchArea { clicked => { root.click(Zone.settings, -1); } }
-            sheet := Rectangle {
-                width: min(root.width - (40px * S.k), (1520px * S.k));
-                height: min(root.height - (40px * S.k), (960px * S.k));
-                x: (root.width - self.width) / 2;
-                y: (root.height - self.height) / 2 + (entered ? 0 : (40px * S.k));
-                opacity: entered ? 1 : 0;
-                animate y { duration: 420ms; easing: ease-out-expo; }
-                animate opacity { duration: 220ms; easing: ease-out-quad; }
-                border-radius: (32px * S.k);
-                clip: true;
-                drop-shadow-blur: (80px * S.k);
-                drop-shadow-color: #0000008c;
-                background: root.settings-has-glass ? transparent : #0b1120f2;
-                // Glass: the art behind it, blurred (Slint can't blur what's behind an element).
-                if root.settings-has-glass: Image {
-                    x: -sheet.absolute-position.x; y: -sheet.absolute-position.y;
-                    width: root.width; height: root.height;
-                    source: root.settings-glass; image-fit: cover;
-                }
-                Rectangle {
-                    border-radius: parent.border-radius;
-                    background: root.settings-has-glass ? #0e1321a8 : transparent;
-                    border-width: 1px; border-color: #ffffff29;
-                }
-                Rectangle { x: (32px * S.k); y: 1px; width: parent.width - (64px * S.k); height: 1px; background: #ffffff24; }
-                TouchArea {}
+            opacity: entered ? 1 : 0;
+            animate opacity { duration: 240ms; easing: ease-out-quad; }
+            // The theme's wallpaper (Deep blue for the game's art), dimmed for reading.
+            Wallpaper { kind: root.wallpaper-kind == 0 ? 1 : root.wallpaper-kind; image: root.wallpaper-image; }
+            Rectangle { background: @linear-gradient(180deg, #04060ecc 0%, #04060ee6 40%, #04060ef2 100%); }
+            TouchArea {}
 
-                // Sections, and Quit under them.
-                nav := VerticalLayout {
-                    x: 0; y: 0;
-                    width: (400px * S.k); height: parent.height;
-                    padding-left: (24px * S.k); padding-right: (24px * S.k);
-                    padding-top: (40px * S.k); padding-bottom: (32px * S.k);
-                    spacing: (6px * S.k);
-                    // The launcher's version under the title, as its caption.
-                    VerticalLayout {
-                        padding-left: (18px * S.k);
-                        padding-bottom: (22px * S.k);
-                        spacing: (2px * S.k);
-                        Text { text: "Settings"; font-size: (32px * S.t); font-weight: 600; color: Theme.text; }
-                        Text { text: root.settings-version; font-size: (15px * S.t); color: #9ba6c0; overflow: elide; }
-                    }
+            // Title: Settings, or the section's name with a way back to the first page.
+            HorizontalLayout {
+                x: (96px * S.k); y: (40px * S.k);
+                height: (64px * S.k);
+                spacing: (18px * S.k);
+                alignment: start;
+                if !root.settings-root: Rectangle {
+                    width: (52px * S.k); height: self.width; y: (6px * S.k);
+                    border-radius: self.width / 2;
+                    background: ta-sback.has-hover ? #ffffff2e : #ffffff14;
+                    Image { source: Icons.chevl; colorize: Theme.text; width: (26px * S.k); height: self.width; }
+                    ta-sback := TouchArea { mouse-cursor: pointer; clicked => { root.settings-back(); } }
+                }
+                if root.settings-root: Image { source: Icons.gear; colorize: Theme.text; width: (36px * S.k); height: self.width; y: (14px * S.k); }
+                Text { text: root.settings-root ? "Settings" : root.settings-title; font-size: (36px * S.t); font-weight: 600; color: Theme.text; vertical-alignment: center; }
+            }
+
+            // ---- First page: the sections, one list.
+            if root.settings-root: Rectangle {
+                property <bool> shown: false;
+                init => { self.shown = true; }
+                property <length> w: min((1080px * S.k), root.width - (192px * S.k));
+                x: (root.width - self.w) / 2;
+                y: (140px * S.k) + (self.shown ? 0 : (24px * S.k));
+                width: self.w;
+                height: root.height - (140px * S.k) - (90px * S.k);
+                opacity: self.shown ? 1 : 0;
+                animate y { duration: 420ms; easing: ease-out-expo; }
+                animate opacity { duration: 260ms; easing: ease-out-quad; }
+                VerticalLayout {
+                    alignment: start;
+                    spacing: 0;
                     for sec[i] in root.settings-sections: Rectangle {
-                        property <bool> chosen: root.settings-section == i;
-                        // Solid while it has focus; lighter while its rows (or Quit) do.
-                        property <bool> solid: root.zone == Zone.settings-nav && root.idx == i;
-                        height: (60px * S.k);
-                        border-radius: (16px * S.k);
-                        background: solid ? #f5f7fb : chosen ? #ffffff1f : ta-sec.has-hover ? #ffffff0f : transparent;
+                        property <bool> f: root.zone == Zone.settings-nav && root.idx == i;
+                        height: (74px * S.k);
+                        border-radius: (14px * S.k);
+                        background: f ? #ffffff1c : ta-root.has-hover ? #ffffff0d : transparent;
+                        border-width: f ? (3px * S.k) : 0;
+                        border-color: #f5f7fb;
                         animate background { duration: 120ms; }
+                        if !f: Rectangle { x: (20px * S.k); y: parent.height - 1px; width: parent.width - (40px * S.k); height: 1px; background: #ffffff14; }
                         HorizontalLayout {
-                            padding-left: (18px * S.k); padding-right: (18px * S.k);
-                            spacing: (16px * S.k);
-                            Rectangle {
-                                width: (10px * S.k); height: self.width; y: (25px * S.k);
-                                border-radius: self.width / 2;
-                                // Amber while the section wants you ("1 ready"), even when it's open.
-                                background: sec.note-kind == 2 ? Theme.warn : chosen ? Theme.accent : #ffffff40;
-                            }
-                            Text {
-                                text: sec.label;
-                                font-size: (20px * S.t); font-weight: chosen ? 600 : 500;
-                                color: solid ? #05070f : #dfe4ef;
-                                vertical-alignment: center; horizontal-stretch: 1;
-                                overflow: elide;
-                            }
-                            // A long one (a controller's full name) is cut short, never past the column.
+                            padding-left: (26px * S.k); padding-right: (26px * S.k);
+                            spacing: (22px * S.k);
+                            Image { source: Icons.get(sec.icon); colorize: Theme.text; width: (30px * S.k); height: self.width; y: (22px * S.k); }
+                            Text { text: sec.label; font-size: (23px * S.t); font-weight: 500; color: Theme.text; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
                             if sec.note != "": Text {
-                                text: sec.note;
-                                max-width: (150px * S.k);
-                                overflow: elide;
-                                font-size: (15px * S.t); font-weight: 500;
-                                color: solid ? #3a4560 : sec.note-kind == 1 ? #8dbaff : sec.note-kind == 2 ? #ffb547 : #9ba6c0;
+                                text: sec.note; max-width: (260px * S.k); overflow: elide;
+                                font-size: (17px * S.t); font-weight: 500;
+                                color: sec.note-kind == 1 ? Theme.accent.brighter(0.4) : sec.note-kind == 2 ? Theme.warn : Theme.hint;
                                 vertical-alignment: center;
                             }
+                            Image { source: Icons.chevr; colorize: f ? Theme.text : #ffffff59; width: (20px * S.k); height: self.width; y: (27px * S.k); }
                         }
-                        ta-sec := TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.settings-nav, i); } }
+                        ta-root := TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.settings-nav, i); } }
                     }
-                    Rectangle { vertical-stretch: 1; }
+                    Rectangle { height: (22px * S.k); }
                     // What Restart or Shut down just said (a game is still running, it failed).
-                    // (Empty ones take no room: the stretch above gives up their spacing.)
                     for q in root.settings-footer: VerticalLayout {
-                        padding-left: (18px * S.k); padding-right: (18px * S.k);
+                        padding-left: (26px * S.k); padding-right: (26px * S.k);
                         if q.hint != "": Text {
-                            text: q.hint;
-                            font-size: (15px * S.t);
-                            color: q.hint-kind == 1 ? Theme.ok : q.hint-kind == 2 ? Theme.danger : #9ba6c0;
-                            wrap: word-wrap;
-                            max-height: (60px * S.k);
-                            overflow: elide;
+                            text: q.hint; font-size: (16px * S.t);
+                            color: q.hint-kind == 1 ? Theme.ok : q.hint-kind == 2 ? Theme.danger : Theme.hint;
+                            wrap: word-wrap; max-height: (60px * S.k); overflow: elide;
                         }
                     }
                     for q[k] in root.settings-footer: Rectangle {
                         property <bool> f: root.zone == Zone.settings-nav && root.idx == root.settings-sections.length + k;
-                        height: (54px * S.k);
-                        border-radius: (16px * S.k);
-                        background: f ? (q.danger ? #ff5a6a40 : #ffffff1f) : ta-q.has-hover ? #ffffff0f : transparent;
+                        height: (64px * S.k);
+                        border-radius: (14px * S.k);
+                        background: f ? (q.danger ? #ff5a6a33 : #ffffff1c) : ta-q.has-hover ? #ffffff0d : transparent;
                         border-width: f ? (3px * S.k) : 0;
-                        border-color: q.danger ? #ff8a9a : #ffffff;
+                        border-color: q.danger ? #ff8a9a : #f5f7fb;
                         HorizontalLayout {
-                            padding-left: (18px * S.k); padding-right: (18px * S.k);
-                            spacing: (12px * S.k);
-                            Image { source: Icons.power; colorize: q.danger ? #ff8a9a : Theme.text2; width: (20px * S.k); height: self.width; y: (17px * S.k); }
-                            Text { text: q.label; font-size: (19px * S.t); font-weight: 500; color: q.danger ? #ff8a9a : Theme.text; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
-                            if q.value != "" && !root.pad-hints: Text { text: q.value; font-size: (15px * S.t); color: Theme.text3; vertical-alignment: center; }
+                            padding-left: (26px * S.k); padding-right: (26px * S.k);
+                            spacing: (22px * S.k);
+                            Image { source: Icons.power; colorize: q.danger ? #ff8a9a : Theme.text2; width: (26px * S.k); height: self.width; y: (19px * S.k); }
+                            Text { text: q.label; font-size: (21px * S.t); font-weight: 500; color: q.danger ? #ff8a9a : Theme.text; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
+                            if q.value != "" && !root.pad-hints: Text { text: q.value; font-size: (16px * S.t); color: Theme.text3; vertical-alignment: center; }
                         }
                         ta-q := TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.settings-nav, root.settings-sections.length + k); } }
                     }
+                    Rectangle { height: (18px * S.k); }
+                    Text { x: (26px * S.k); text: root.settings-version; font-size: (16px * S.t); color: Theme.hint; }
                 }
-                Rectangle { x: nav.width; y: 0; width: 1px; height: parent.height; background: #ffffff1a; }
+            }
 
-                // The chosen section's rows: its title, the rows (scrolling), what the buttons do.
-                Rectangle {
-                    x: nav.width + 1px; y: 0;
-                    width: parent.width - nav.width - 1px; height: parent.height;
-                    property <length> pad-x: (56px * S.k);
-                    hdr := VerticalLayout {
-                        x: parent.pad-x; y: (48px * S.k);
-                        width: parent.width - 2 * parent.pad-x;
-                        height: self.preferred-height;
-                        spacing: (8px * S.k);
-                        Text { text: root.settings-title; font-size: (34px * S.t); font-weight: 600; color: Theme.text; }
-                        Text { text: root.settings-sub; font-size: (19px * S.t); color: #b9c3da; }
+            // ---- A section's page: the sections on the left, its rows on the right.
+            if !root.settings-root: Rectangle {
+                property <bool> shown: false;
+                init => { self.shown = true; }
+                opacity: self.shown ? 1 : 0;
+                animate opacity { duration: 220ms; easing: ease-out-quad; }
+                VerticalLayout {
+                    x: (96px * S.k) - (4px * S.k); y: (140px * S.k);
+                    width: (360px * S.k);
+                    height: self.preferred-height;
+                    spacing: (4px * S.k);
+                    for sec[i] in root.settings-sections: Rectangle {
+                        property <bool> chosen: root.settings-section == i;
+                        property <bool> f: root.zone == Zone.settings-nav && root.idx == i;
+                        height: (56px * S.k);
+                        border-radius: (12px * S.k);
+                        background: f ? #ffffff1c : chosen ? #ffffff12 : ta-sec.has-hover ? #ffffff0a : transparent;
+                        border-width: f ? (3px * S.k) : 0;
+                        border-color: #f5f7fb;
+                        animate background { duration: 120ms; }
+                        HorizontalLayout {
+                            padding-left: (18px * S.k); padding-right: (14px * S.k);
+                            spacing: (14px * S.k);
+                            Rectangle {
+                                width: (4px * S.k); height: (24px * S.k); y: (16px * S.k);
+                                border-radius: (2px * S.k);
+                                background: sec.note-kind == 2 ? Theme.warn : chosen ? Theme.accent : transparent;
+                            }
+                            Text {
+                                text: sec.label; font-size: (20px * S.t); font-weight: chosen ? 600 : 400;
+                                color: chosen || f ? Theme.text : Theme.text2;
+                                vertical-alignment: center; horizontal-stretch: 1; overflow: elide;
+                            }
+                        }
+                        ta-sec := TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.settings-nav, i); } }
                     }
+                }
+                // The rows: under a line saying what the section is for.
+                Rectangle {
+                    x: (96px * S.k) + (360px * S.k) + (64px * S.k);
+                    y: (140px * S.k);
+                    width: root.width - self.x - (96px * S.k);
+                    height: root.height - self.y - (90px * S.k);
+                    Text { x: 0; y: (8px * S.k); text: root.settings-sub; font-size: (19px * S.t); color: Theme.hint; }
                     rows := Flickable {
                         // 4 px of room each side for the focus ring.
-                        x: parent.pad-x - (4px * S.k); y: hdr.y + hdr.height + (26px * S.k);
-                        width: parent.width - 2 * parent.pad-x + (8px * S.k);
-                        height: set-hints.y - self.y - (12px * S.k);
+                        x: -(4px * S.k); y: (64px * S.k);
+                        width: parent.width + (8px * S.k);
+                        height: parent.height - self.y;
                         content-y <=> root.settings-y;
                         // Room for the focus ring around the first and last rows.
                         content-height: list.preferred-height;
@@ -1873,19 +1932,22 @@ export component AppWindow inherits Window {
                                 property <bool> shown: s.kind != 0 && s.section == root.settings-section;
                                 property <bool> f: root.zone == Zone.settings && root.idx == i;
                                 visible: shown;
-                                padding-bottom: shown ? (10px * S.k) : 0;
+                                padding-bottom: shown ? (4px * S.k) : 0;
                                 height: shown ? self.preferred-height : 0;
                                 if shown: row := Rectangle {
                                     property <bool> editing: s.kind == 1 && root.edit-index == i;
                                     // What's on the right (a switch, a value, a choice, at least a
                                     // chevron), centred on the row; the words wrap beside it.
                                     property <bool> has-right: !editing;
-                                    height: max((84px * S.k), words.preferred-height);
-                                    border-radius: (18px * S.k);
-                                    background: f ? (s.danger ? #ff5a6a33 : #ffffff24) : (s.danger ? #ff5a6a12 : #ffffff0f);
-                                    border-width: f ? (3px * S.k) : 1px;
-                                    border-color: f ? (s.danger ? Theme.danger : #f5f7fb) : #ffffff14;
-                                    TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.settings, i); } }
+                                    height: max((80px * S.k), words.preferred-height);
+                                    // A plain line in a list, as a console's: the one chosen is outlined.
+                                    border-radius: (14px * S.k);
+                                    background: f ? (s.danger ? #ff5a6a33 : #ffffff1c) : ta-row.has-hover ? #ffffff0d : transparent;
+                                    border-width: f ? (3px * S.k) : 0;
+                                    border-color: s.danger ? Theme.danger : #f5f7fb;
+                                    animate background { duration: 120ms; }
+                                    if !f: Rectangle { x: (20px * S.k); y: parent.height - 1px; width: parent.width - (40px * S.k); height: 1px; background: #ffffff14; }
+                                    ta-row := TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.settings, i); } }
                                     words := VerticalLayout {
                                         x: 0; y: 0; width: parent.width; height: parent.height;
                                         padding-left: (24px * S.k);
@@ -2000,44 +2062,45 @@ export component AppWindow inherits Window {
                             }
                         }
                     }
-                    // What the buttons do here.
-                    set-hints := HorizontalLayout {
-                        // Not behind the cards opened from it (Join Wi-Fi, Restart now?): they show
-                        // their own keys.
-                        visible: root.overlay == 2;
-                        x: parent.pad-x; width: parent.width - 2 * parent.pad-x;
-                        height: (26px * S.t); y: parent.height - (36px * S.k) - self.height;
-                        alignment: end;
-                        spacing: (22px * S.k);
-                        // Back/Close can be clicked too: from the rows to the sections, else closed.
-                        // About has no rows to open: only Close there.
-                        // What Enter does: open a section, change a row, or (on Quit, Restart…) that.
-                        for h in (root.zone == Zone.settings-nav && root.idx >= root.settings-sections.length) ? [
-                            { glyph: root.pad-hints ? "✕" : "Enter", label: "Select", tint: #8dbaff, back: false },
-                            { glyph: root.pad-hints ? "○" : "Esc", label: "Close", tint: #ff8a9a, back: true },
-                        ] : (!in-rows && root.settings-section == root.settings-sections.length - 1) ? [
-                            { glyph: root.pad-hints ? "○" : "Esc", label: "Close", tint: #ff8a9a, back: true },
-                        ] : [
-                            { glyph: root.pad-hints ? "✕" : "Enter", label: !in-rows ? "Open" : root.settings[root.idx].kind == 4 ? "Select" : "Change", tint: #8dbaff, back: false },
-                            { glyph: root.pad-hints ? "○" : "Esc", label: in-rows ? "Back" : "Close", tint: #ff8a9a, back: true },
-                        ]: Rectangle {
-                            width: hint-row.preferred-width;
-                            hint-row := HorizontalLayout {
-                                spacing: (8px * S.k);
-                                Rectangle {
-                                    width: root.pad-hints ? (26px * S.k) : kc.preferred-width + (14px * S.k);
-                                    height: (26px * S.k);
-                                    border-radius: (13px * S.k);
-                                    background: #ffffff24;
-                                    kc := Text { text: h.glyph; font-size: root.pad-hints ? (13px * S.k) : (12px * S.k); color: root.pad-hints ? h.tint : #dfe4ef; font-weight: 600; }
-                                }
-                                Text { text: h.label; font-size: (16px * S.t); color: #dfe4ef; vertical-alignment: center; }
-                            }
-                            if h.back: TouchArea {
-                                mouse-cursor: pointer;
-                                clicked => { root.settings-back(); }
-                            }
+                }
+            }
+
+            // What the buttons do here.
+            set-hints := HorizontalLayout {
+                // Not behind the cards opened from it (Join Wi-Fi, Restart now?): they show
+                // their own keys.
+                visible: root.overlay == 2;
+                x: (96px * S.k); width: root.width - (192px * S.k);
+                height: (26px * S.t); y: root.height - (44px * S.k) - self.height;
+                alignment: end;
+                spacing: (22px * S.k);
+                // Back/Close can be clicked too: from the rows to the sections, else closed.
+                // About has no rows to open: only Close there.
+                // What Enter does: open a section, change a row, or (on Quit, Restart…) that.
+                for h in (root.zone == Zone.settings-nav && (root.settings-root || root.idx >= root.settings-sections.length)) ? [
+                    { glyph: root.pad-hints ? "✕" : "Enter", label: "Select", tint: #8dbaff, back: false },
+                    { glyph: root.pad-hints ? "○" : "Esc", label: "Close", tint: #ff8a9a, back: true },
+                ] : (!in-rows && root.settings-section == root.settings-sections.length - 1) ? [
+                    { glyph: root.pad-hints ? "○" : "Esc", label: "Back", tint: #ff8a9a, back: true },
+                ] : [
+                    { glyph: root.pad-hints ? "✕" : "Enter", label: !in-rows ? "Open" : root.settings[root.idx].kind == 4 ? "Select" : "Change", tint: #8dbaff, back: false },
+                    { glyph: root.pad-hints ? "○" : "Esc", label: root.settings-root ? "Close" : "Back", tint: #ff8a9a, back: true },
+                ]: Rectangle {
+                    width: hint-row.preferred-width;
+                    hint-row := HorizontalLayout {
+                        spacing: (8px * S.k);
+                        Rectangle {
+                            width: root.pad-hints ? (26px * S.k) : kc.preferred-width + (14px * S.k);
+                            height: (26px * S.k);
+                            border-radius: (13px * S.k);
+                            background: #ffffff24;
+                            kc := Text { text: h.glyph; font-size: root.pad-hints ? (13px * S.k) : (12px * S.k); color: root.pad-hints ? h.tint : #dfe4ef; font-weight: 600; }
                         }
+                        Text { text: h.label; font-size: (16px * S.t); color: #dfe4ef; vertical-alignment: center; }
+                    }
+                    if h.back: TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => { root.settings-back(); }
                     }
                 }
             }
