@@ -6,6 +6,8 @@ export component FocusRing inherits Rectangle {
     in property <bool> on;
     in property <length> w;
     in property <length> h;
+    // The halo is a shadow, which fills the ring's shape: off over see-through cards.
+    in property <bool> glow: true;
     x: -(4px * S.k);
     y: -(4px * S.k);
     width: w + (8px * S.k);
@@ -14,7 +16,7 @@ export component FocusRing inherits Rectangle {
     border-width: (4px * S.k);
     border-color: Theme.ring;
     opacity: self.on ? 1 : 0;
-    drop-shadow-blur: self.on ? (28px * S.k) : 0;
+    drop-shadow-blur: self.on && self.glow ? (28px * S.k) : 0;
     drop-shadow-color: Theme.glow;
     animate opacity { duration: Theme.fast; }
 }

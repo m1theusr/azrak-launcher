@@ -64,6 +64,29 @@ fn read_from(root: &Path) -> Option<Battery> {
     Some(Battery { percent: percent as u8, plugged })
 }
 
+/// A controller's battery (a DualSense, a Switch Pro, an Xbox pad over Bluetooth): what the
+/// kernel reports for the devices it powers (`scope=Device`), for Home's Welcome. Mice and
+/// keyboards report the same way; the controller is the one whose name says so.
+pub fn controllers() -> Vec<Battery> {
+    controllers_from(Path::new("/sys/class/power_supply"))
+}
+
+fn controllers_from(root: &Path) -> Vec<Battery> {
+    let read = |dir: &Path, file: &str| std::fs::read_to_string(dir.join(file)).ok().map(|s| s.trim().to_string());
+    let Ok(dir) = std::fs::read_dir(root) else { return Vec::new() };
+    let mut entries: Vec<_> = dir.flatten().map(|e| e.path()).collect();
+    entries.sort();
+    entries.iter().filter(|dir| {
+        let name = dir.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
+        read(dir, "scope").as_deref() == Some("Device")
+            && ["controller", "gamepad", "joy", "xpad", "nintendo", "sony", "dualsense", "xbox"].iter().any(|k| name.contains(k))
+    }).filter_map(|dir| {
+        let percent = read(dir, "capacity").and_then(|c| c.parse::<u8>().ok())?.min(100);
+        let plugged = matches!(read(dir, "status").as_deref(), Some("Charging") | Some("Full"));
+        Some(Battery { percent, plugged })
+    }).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -91,6 +114,18 @@ mod tests {
         supply(&root, "BAT0", &[("type", "Battery"), ("status", "Discharging"), ("energy_now", "10000000"), ("energy_full", "40000000")]);
         supply(&root, "BAT1", &[("type", "Battery"), ("status", "Discharging"), ("energy_now", "30000000"), ("energy_full", "40000000")]);
         assert_eq!(read_from(&root), Some(Battery { percent: 50, plugged: false }));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn reads_controller_batteries_but_not_mice() {
+        let root = std::env::temp_dir().join(format!("azrak-pad-battery-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        supply(&root, "BAT0", &[("type", "Battery"), ("capacity", "40")]);
+        supply(&root, "hidpp_battery_0", &[("type", "Battery"), ("scope", "Device"), ("capacity", "90")]);
+        assert_eq!(controllers_from(&root), vec![], "a laptop's or a mouse's battery isn't a controller's");
+        supply(&root, "ps-controller-battery-aa:bb", &[("type", "Battery"), ("scope", "Device"), ("status", "Discharging"), ("capacity", "70")]);
+        assert_eq!(controllers_from(&root), vec![Battery { percent: 70, plugged: false }]);
         let _ = std::fs::remove_dir_all(&root);
     }
 }

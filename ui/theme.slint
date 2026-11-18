@@ -66,6 +66,8 @@ export global Icons {
     out property <image> alert: @image-url("../assets/icons/alert.svg");
     out property <image> app: @image-url("../assets/icons/app-icon.svg");
     out property <image> more: @image-url("../assets/icons/more.svg");
+    out property <image> gamepad: @image-url("../assets/icons/gamepad.svg");
+    out property <image> sparkle: @image-url("../assets/icons/sparkle.svg");
     out property <image> spinner: @image-url("../assets/icons/spinner.svg");
     out property <image> wifi: @image-url("../assets/icons/wifi.svg");
     out property <image> lock: @image-url("../assets/icons/lock.svg");
@@ -126,6 +128,7 @@ export global Zone {
     out property <int> settings-nav: 26;
     out property <int> control-center: 27;
     out property <int> home-peek: 28;
+    out property <int> welcome: 29;
 }
 
 // dot: KytyPS5 compatibility level (0 none, 1 in-game, 2 menus, 3 boots, 4 doesn't boot, 5 untested)
@@ -168,8 +171,14 @@ export struct TileData {
     image: image,
     loaded: bool,
     special: bool,
+    // Home's first tile: SwarmPlay's Welcome (its widgets in place of a game's hero).
+    welcome: bool,
     badge: string,      // "", "Installed", "Playing", "New"
 }
+
+// One of the Welcome tile's widgets: an icon, what it is, the figure that matters and a line
+// under it; `progress` (0..1, or below 0 for none) draws a bar; kind: the Fact colours.
+export struct WidgetData { icon: int /* src/welcome.rs Icons */, title: string, value: string, sub: string, progress: float, kind: int }
 
 export struct HeroData {
     kicker: string,

@@ -135,7 +135,7 @@ impl App {
         let (info, local, cover) = match item {
             RowItem::Local(l) => (self.locals[l].info.as_ref(), Some(&self.locals[l].l), self.locals[l].cat.map(|c| self.games[c].g.cover.clone())),
             RowItem::Cat(g) => (self.games[g].info.as_ref(), None, Some(self.games[g].g.cover.clone())),
-            RowItem::All => return None,
+            RowItem::All | RowItem::Welcome => return None,
         };
         if let Some(r) = info.and_then(|i| req_url(&i.master, 256, 0.0)) {
             return Some(r);
@@ -143,7 +143,7 @@ impl App {
         if let Some(p) = local.and_then(|l| l.icon0.as_ref()) {
             return Some(req_file(p, 256));
         }
-        let crop = self.cover_crop(match item { RowItem::Local(l) => Target { game: self.locals[l].cat, local: Some(l) }, RowItem::Cat(g) => Target { game: Some(g), local: None }, RowItem::All => Target { game: None, local: None } });
+        let crop = self.cover_crop(match item { RowItem::Local(l) => Target { game: self.locals[l].cat, local: Some(l) }, RowItem::Cat(g) => Target { game: Some(g), local: None }, RowItem::All | RowItem::Welcome => Target { game: None, local: None } });
         if let Some(r) = cover.and_then(|c| req_url(&c, 256, crop)) {
             return Some(r);
         }
@@ -171,6 +171,8 @@ impl App {
     pub fn row_cover_req(&self, i: usize) -> Option<ImgReq> {
         match self.row.get(i)? {
             RowItem::All => None,
+            // The Welcome shows the last game played's art (a wallpaper, until themes).
+            RowItem::Welcome => self.row.get(1).and_then(|_| self.cover_req(self.row_target(1))),
             _ => self.cover_req(self.row_target(i)),
         }
     }
@@ -189,6 +191,7 @@ impl App {
                 let g = self.games.iter().find(|g| g.info.as_ref().is_some_and(|i| !i.hub.is_empty()))?;
                 req_url(&g.info.as_ref()?.hub, 1920, 0.0)
             }
+            RowItem::Welcome => self.row.get(1).and_then(|_| self.target_bg_url(self.row_target(1))),
             _ => self.target_bg_url(self.row_target(i)),
         }
     }
@@ -250,7 +253,7 @@ impl App {
             let p = if i.abs_diff(self.sel) < 12 { prio::TILE } else { prio::PREFETCH };
             let img = self.get_img(&req, p);
             keys.push(req.map(|r| r.key).unwrap_or_default());
-            tiles.push(TileData { loaded: img.is_some(), image: img.unwrap_or_default(), special: *it == RowItem::All, badge: self.tile_badge(*it).into() });
+            tiles.push(TileData { loaded: img.is_some(), image: img.unwrap_or_default(), special: *it == RowItem::All, welcome: *it == RowItem::Welcome, badge: self.tile_badge(*it).into() });
         }
         self.tile_keys = keys;
         self.tile_model.set_vec(tiles);
@@ -271,6 +274,7 @@ impl App {
         let (name, sub) = match self.row.get(self.sel).copied() {
             None => (String::new(), String::new()),
             Some(RowItem::All) => ("Game Library".into(), format!("{} games · {} releases", self.library_total, self.games.len())),
+            Some(RowItem::Welcome) => ("Welcome".into(), "Your SwarmPlay at a glance".into()),
             Some(RowItem::Local(l)) => {
                 let lv = &self.locals[l];
                 let sub = if let Some(s) = self.session_for_local(l) {
@@ -385,7 +389,7 @@ impl App {
         let ui = self.ui();
         let mut h = if ui.get_hero_front_b() { ui.get_hero_b() } else { ui.get_hero() };
         if let Some(it) = self.row.get(self.sel).copied() {
-            if it != RowItem::All {
+            if it.is_game() {
                 let (k, a, live) = self.kicker_for(self.row_target(self.sel), false);
                 h.kicker = k.into();
                 h.kicker_accent = a.into();
@@ -425,6 +429,8 @@ impl App {
                     self.hero_actions = vec![mk("library", "Open Library", "grid", true)];
                 }
             }
+            // Its widgets show in place of a hero (src/welcome.rs); nothing to press but them.
+            Some(RowItem::Welcome) => self.hero_actions.clear(),
             Some(_) => {
                 let t = self.row_target(self.sel);
                 let info = self.target_info(t);
@@ -438,7 +444,7 @@ impl App {
                     self.hero_logo_key = r.key.clone();
                     match self.get_img(&lr, prio::HERO) {
                         Some(img) => {
-                            let (w, hh) = logo_size(&img, 620.0, 200.0);
+                            let (w, hh) = logo_size(&img, 520.0, 170.0);
                             h.logo = img;
                             h.has_logo = true;
                             h.logo_w = w * self.scale;
@@ -476,6 +482,7 @@ impl App {
             self.set_focus(Z_ACTIONS, 0);
         }
         self.ui().set_home_peek(model(peek));
+        self.push_welcome();
         // No tiles to select: selection lives on the buttons.
         if self.row.is_empty() && self.zone == Z_ROW && self.overlay == Overlay::None && !self.hero_actions.is_empty() {
             self.set_focus(Z_ACTIONS, 0);
@@ -536,7 +543,7 @@ impl App {
                 self.images.want(&r.key, r.src, r.w, r.crop, prio::PREFETCH);
             }
             let info = match self.row[i] {
-                RowItem::All => None,
+                RowItem::All | RowItem::Welcome => None,
                 _ => self.target_info(self.row_target(i)),
             };
             if let Some(r) = Self::logo_req(info.as_ref()) {
