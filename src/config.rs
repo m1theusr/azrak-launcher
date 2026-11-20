@@ -54,6 +54,17 @@ pub struct Config {
     pub overlay_pause: bool,
     /// Windows games get controllers through SDL, as XInput ones (src/wine_pads.rs).
     pub wine_sdl_pads: bool,
+    /// Settings → Notifications (src/toast.rs): pop-ups at all, how long they stay, their sound,
+    /// during games ("All", "Important only", "None"), desktop notifications in the background,
+    /// Do not disturb until (Unix seconds), kinds turned off (by name), the catalog digest's day.
+    pub notify_popups: bool,
+    pub notify_secs: u32,
+    pub notify_sound: bool,
+    pub notify_games: String,
+    pub notify_desktop: bool,
+    pub notify_dnd_until: f64,
+    pub notify_off: Vec<String>,
+    pub last_digest_day: i64,
 }
 
 impl Default for Config {
@@ -89,6 +100,14 @@ impl Default for Config {
             overlay_toasts: true,
             overlay_pause: false,
             wine_sdl_pads: true,
+            notify_popups: true,
+            notify_secs: 6,
+            notify_sound: true,
+            notify_games: "Important only".into(),
+            notify_desktop: true,
+            notify_dnd_until: 0.0,
+            notify_off: Vec::new(),
+            last_digest_day: 0,
         }
     }
 }

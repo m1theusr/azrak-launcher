@@ -382,6 +382,8 @@ impl App {
         self.boot.active = false;
         self.overlay = Overlay::None;
         crate::log!("home screen shown");
+        self.notify_digest();
+        self.push_notes();
         let ui = self.ui();
         ui.set_overlay(0);
         self.set_focus(self.home_zone(), 0);

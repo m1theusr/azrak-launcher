@@ -53,6 +53,7 @@ pub const Z_CONTROL_CENTER: i32 = 27;
 /// The Game Hub's cards peeking at the bottom of Home (present.rs, peek_cards).
 pub const Z_HOME_PEEK: i32 = 28;
 pub const Z_WELCOME: i32 = 29;
+pub const Z_NOTES: i32 = 30;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Overlay {
@@ -78,6 +79,8 @@ pub enum Overlay {
     Setup = 15,
     /// Guide's panel: the running game, downloads, quick ways around (control_center.rs).
     ControlCenter = 16,
+    /// The list of notifications (src/toast.rs).
+    Notifications = 17,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -403,7 +406,18 @@ pub struct App {
     battery_read: f64,
     /// When the Welcome's widgets were last read (src/welcome.rs).
     pub welcome_read: f64,
-    /// The notification on screen (src/toast.rs): a newer one replaces it.
+    /// Notifications (src/toast.rs): the list, the cards showing (id, since), and what the
+    /// watchers remember (when they last looked, controllers, a low battery told, the day little
+    /// room was told, downloads' last progress, downloads waiting for the VPN).
+    pub notes: crate::toast::Store,
+    pub popups: Vec<(u64, f64)>,
+    pub watch_at: f64,
+    pub pads_seen: Vec<String>,
+    pub pad_low_told: bool,
+    pub low_space_day: i64,
+    pub dl_moved: HashMap<String, (u64, f64, bool)>,
+    pub vpn_told: std::collections::HashSet<String>,
+    /// Bumps with every notification (a newer one's timers win).
     pub toast_seq: u64,
     /// Settings → Sound's volume, mute and outputs, as last read (src/sound.rs).
     pub sound: crate::sound::State,
@@ -731,6 +745,14 @@ pub fn run(ui: AppWindow, monitors: Vec<Monitor>, target_monitor: Option<Monitor
         battery: None,
         battery_read: 0.0,
         welcome_read: 0.0,
+        notes: crate::toast::Store::load(),
+        popups: Vec::new(),
+        watch_at: 0.0,
+        pads_seen: Vec::new(),
+        pad_low_told: false,
+        low_space_day: 0,
+        dl_moved: HashMap::new(),
+        vpn_told: Default::default(),
         toast_seq: 0,
         sound: Default::default(),
         sound_polling: false,
@@ -928,7 +950,7 @@ fn wire_callbacks(ui: &AppWindow) {
         app.push_viewer();
         audio::play(Sound::Move);
     }));
-    ui.on_toast_dismiss(|| with_app(|app| app.ui().set_toast_shown(false)));
+    ui.on_toast_click(|id| with_app(move |app| app.popup_clicked(id as u64)));
     ui.on_grid_scrolled(|| with_app(|app| app.push_grid_window()));
     ui.on_grid_wheel(|dy| with_app(move |app| app.grid_wheel(dy)));
     ui.on_resized(|| with_app(|app| {
@@ -1882,6 +1904,9 @@ impl App {
                 let what = match crashed {
                     Some(code) => {
                         crate::log!("{} crashed (exit {code}), log: {}", e.name, e.log.display());
+                        let log = e.log.to_string_lossy().into_owned();
+                        self.notify(crate::toast::Cat::Games, crate::toast::FAILED, "alert", &format!("{} closed", e.name), &format!("It exited with code {code} · open its log"),
+                            if log.is_empty() { crate::toast::Action::None } else { crate::toast::Action::File(log) }, &format!("crash:{}", e.game_id), true);
                         audio::play(Sound::Error);
                         format!("Stopped unexpectedly · {} exited with code {code}", if pc { "the game" } else { emulator })
                     }
@@ -1948,6 +1973,8 @@ impl App {
         }
         self.battery_tick();
         self.welcome_tick();
+        self.notes_tick();
+        self.notify_watch();
         // The panel over the game: its clock, play time and downloads as they go.
         if self.ov_open { self.ov_push(); }
         let running = match self.live.first() {
@@ -2342,6 +2369,7 @@ impl App {
             Overlay::SearchKeys => self.act_search_keys(a),
             Overlay::Power => self.act_power(a),
             Overlay::ControlCenter => self.act_control_center(a),
+            Overlay::Notifications => self.act_notifications(a),
             Overlay::Settings if self.zone == Z_SETTINGS_NAV => self.act_settings_nav(a),
             Overlay::Settings => self.act_settings_rows(a),
             Overlay::Hub => self.act_hub(a),
@@ -2794,7 +2822,7 @@ impl App {
     /// a moment, then closes. Everything else closes at once. (Code that needs the page gone right
     /// away calls `back`.)
     pub fn back_soft(&mut self) {
-        const SOFT: [Overlay; 6] = [Overlay::Settings, Overlay::Menu, Overlay::Viewer, Overlay::Downloads, Overlay::Controls, Overlay::ControlCenter];
+        const SOFT: [Overlay; 7] = [Overlay::Settings, Overlay::Menu, Overlay::Viewer, Overlay::Downloads, Overlay::Controls, Overlay::ControlCenter, Overlay::Notifications];
         let ov = self.overlay;
         if !SOFT.contains(&ov) || (ov == Overlay::Downloads && self.ui().get_download_consent()) {
             return self.back();

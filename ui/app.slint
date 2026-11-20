@@ -1,4 +1,4 @@
-import { S, Theme, Icons, Zone, DownloadData, DlTab, DlChoice, SetupFile, BootStep, OsiDisk, WjKey, ChipData, ActionData, TileData, HeroData, CardData, CardRow, GenreChip, Fact, FactRow, Shot, HubData, WidgetData, ToastData, SettingData, SettingSection, MenuItem, RunningData } from "theme.slint";
+import { S, Theme, Icons, Zone, DownloadData, DlTab, DlChoice, SetupFile, BootStep, OsiDisk, WjKey, ChipData, ActionData, TileData, HeroData, CardData, CardRow, GenreChip, Fact, FactRow, Shot, HubData, WidgetData, ToastData, NoteRow, SettingData, SettingSection, MenuItem, RunningData } from "theme.slint";
 import { FocusRing, Chip, Btn, Kicker, Badge, Switch, KeyCap, KeyboardKey, BackButton, Shimmer, Cover } from "widgets.slint";
 import { DownloadsPage, DownloadConsent, DownloadPanel, Capsule } from "downloads.slint";
 import { LibraryFilter, LibrarySortPicker } from "library.slint";
@@ -365,10 +365,13 @@ export component AppWindow inherits Window {
     // Where the Options menu opens: 0 the middle, 1 beside Home's ··· button, 2 the bottom right
     // corner (Power, from the Control Center).
     in property <int> menu-anchor;
-    // The notification at the top right (src/toast.rs).
-    in property <ToastData> toast;
-    in property <bool> toast-shown;
-    callback toast-dismiss();
+    // Notifications (src/toast.rs): the cards showing (newest first), how many are unread and
+    // the newest one's title (the Control Center's card), and the list.
+    in property <[ToastData]> toasts;
+    in property <int> notif-count;
+    in property <string> notif-last;
+    in property <[NoteRow]> notes;
+    callback toast-click(int);
 
     in property <bool> boot-first;
     // Started with "Try AzrakOS" on the USB stick, right after "Welcome to AzrakOS": this screen
@@ -1385,7 +1388,7 @@ export component AppWindow inherits Window {
             border-color: Theme.line;
             // Hidden over the library grid so it never covers game titles, and under Settings and
             // the cards that ask something (Join Wi-Fi, Restart now?): they show their own keys.
-            visible: root.overlay != 4 && root.overlay != 3 && root.overlay != 6 && root.overlay != 7 && root.overlay != 12 && root.overlay != 13
+            visible: root.overlay != 4 && root.overlay != 3 && root.overlay != 6 && root.overlay != 7 && root.overlay != 12 && root.overlay != 13 && root.overlay != 17
                 && root.overlay != 2
                 && (root.view == 0 || root.overlay != 0);
             hints := HorizontalLayout {
@@ -2482,6 +2485,32 @@ export component AppWindow inherits Window {
                         }
                         TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.control-center, o); } }
                     }
+                    // Notifications: how many are new, the newest; opens the list.
+                    nt-card := Rectangle {
+                        property <bool> f: root.zone == Zone.control-center && root.idx == o + 1;
+                        width: (400px * S.k);
+                        FocusRing { w: parent.width; h: parent.height; on: nt-card.f; radius: (20px * S.k); }
+                        Rectangle { border-radius: (20px * S.k); background: #1c2440; }
+                        VerticalLayout {
+                            padding: (22px * S.k);
+                            spacing: (8px * S.k);
+                            HorizontalLayout {
+                                spacing: (10px * S.k);
+                                alignment: start;
+                                Text { text: "NOTIFICATIONS"; font-size: (15px * S.k); font-weight: 600; letter-spacing: (1.5px * S.k); color: Theme.text2; }
+                                if root.notif-count > 0: Rectangle {
+                                    width: max(self.height, nc.preferred-width + (14px * S.k)); height: (22px * S.k);
+                                    border-radius: self.height / 2;
+                                    background: Theme.accent;
+                                    nc := Text { text: root.notif-count; font-size: (13px * S.k); font-weight: 700; color: #ffffff; }
+                                }
+                            }
+                            Text { text: root.notif-last; font-size: (22px * S.k); font-weight: 600; color: Theme.text; overflow: elide; }
+                            Rectangle { vertical-stretch: 1; }
+                            Text { text: "Open notifications"; font-size: (17px * S.k); color: Theme.hint; }
+                        }
+                        TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.control-center, o + 1); } }
+                    }
                 }
                 // Bottom row: quick ways around.
                 HorizontalLayout {
@@ -2492,7 +2521,7 @@ export component AppWindow inherits Window {
                     alignment: start;
                     for t[i] in [{ label: "Library", icon: "grid" }, { label: "Settings", icon: "gear" }, { label: "Controls", icon: "info" },
                                  { label: root.on-os ? "Power" : "Quit", icon: "power" }]: Rectangle {
-                        property <bool> f: root.zone == Zone.control-center && root.idx == o + 1 + i;
+                        property <bool> f: root.zone == Zone.control-center && root.idx == o + 2 + i;
                         width: (128px * S.k);
                         border-radius: (20px * S.k);
                         background: f ? #ffffff : #ffffff14;
@@ -2503,7 +2532,7 @@ export component AppWindow inherits Window {
                         drop-shadow-color: Theme.glow;
                         Image { source: Icons.get(t.icon); colorize: f ? #0a0d18 : Theme.text; width: (34px * S.k); height: (34px * S.k); y: (30px * S.k); }
                         Text { text: t.label; y: (80px * S.k); width: parent.width; horizontal-alignment: center; font-size: (17px * S.k); font-weight: 500; color: f ? #0a0d18 : Theme.text; }
-                        TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.control-center, o + 1 + i); } }
+                        TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.control-center, o + 2 + i); } }
                     }
                 }
                 Text {
@@ -3623,38 +3652,165 @@ export component AppWindow inherits Window {
         // ------------------------------------------------------------ NOTIFICATION
         // A small card at the top right, over everything: slides in, goes after five seconds
         // (src/toast.rs). Clicked, it goes at once.
-        toast-card := Rectangle {
-            property <color> tone: root.toast.kind == 1 ? Theme.ok : root.toast.kind == 2 ? Theme.warn : root.toast.kind == 3 ? Theme.danger : Theme.accent;
-            width: min((480px * S.k), root.width - (64px * S.k));
+        // Up to three, newest on top; the ones under it a little smaller and dimmer, as on a
+        // console. Clicked: where it leads (or the list).
+        for t[i] in root.toasts: toast-card := Rectangle {
+            property <bool> came: false;
+            init => { self.came = true; }
+            property <color> tone: t.kind == 1 ? Theme.ok : t.kind == 2 ? Theme.warn : t.kind == 3 ? Theme.danger : Theme.accent;
+            width: min((460px * S.k), root.width - (64px * S.k));
             height: (84px * S.k);
-            x: root.width - self.width - (root.toast-shown ? (96px * S.k) : (40px * S.k));
-            y: (108px * S.k);
-            opacity: root.toast-shown ? 1 : 0;
-            visible: self.opacity > 0;
+            x: root.width - self.width - (self.came ? (96px * S.k) : (40px * S.k));
+            y: (108px * S.k) + i * (94px * S.k);
+            opacity: self.came ? 1 : 0;
+            transform-scale: i == 0 ? 1 : 0.96;
             animate x { duration: 420ms; easing: ease-out-expo; }
+            animate y, transform-scale { duration: 260ms; easing: ease-out-quart; }
             animate opacity { duration: 240ms; easing: ease-out-quad; }
             border-radius: (18px * S.k);
-            background: #1a1e2bf5;
+            background: ta-toast.has-hover ? #252a3a : #1a1e2b;
             border-width: 1px;
             border-color: #ffffff1f;
             drop-shadow-blur: (32px * S.k);
             drop-shadow-color: #00000099;
             HorizontalLayout {
-                padding-left: (18px * S.k); padding-right: (22px * S.k);
+                padding-left: (18px * S.k); padding-right: (20px * S.k);
                 spacing: (16px * S.k);
                 Rectangle {
                     width: (48px * S.k); height: self.width; y: (18px * S.k);
                     border-radius: self.width / 2;
                     background: toast-card.tone.with-alpha(0.22);
-                    Image { source: Icons.get(root.toast.icon); colorize: toast-card.tone; width: (24px * S.k); height: self.width; }
+                    Image { source: Icons.get(t.icon); colorize: toast-card.tone; width: (24px * S.k); height: self.width; }
                 }
                 VerticalLayout {
                     alignment: center; spacing: (3px * S.k);
-                    Text { text: root.toast.title; font-size: (20px * S.k); font-weight: 600; color: Theme.text; overflow: elide; }
-                    if root.toast.sub != "": Text { text: root.toast.sub; font-size: (16px * S.k); color: Theme.text2; overflow: elide; }
+                    horizontal-stretch: 1;
+                    Text { text: t.title; font-size: (19px * S.k); font-weight: 600; color: Theme.text; overflow: elide; }
+                    if t.sub != "": Text { text: t.sub; font-size: (16px * S.k); color: Theme.text2; overflow: elide; }
+                }
+                Text { text: t.time; font-size: (14px * S.k); color: Theme.text3; vertical-alignment: center; }
+            }
+            // The older ones dimmed, but still solid: what's under them doesn't show through.
+            Rectangle {
+                border-radius: parent.border-radius;
+                background: #0a0d16;
+                opacity: i == 0 ? 0 : 0.42;
+                animate opacity { duration: 260ms; easing: ease-out-quart; }
+            }
+            ta-toast := TouchArea { mouse-cursor: pointer; clicked => { root.toast-click(t.id); } }
+        }
+        if root.toasts.length > 0 && root.overlay == 0: Text {
+            x: root.width - self.width - (100px * S.k);
+            y: (108px * S.k) + root.toasts.length * (94px * S.k) + (2px * S.k);
+            text: root.pad-hints ? "PS  to see it" : "Click to open";
+            font-size: (14px * S.k); color: Theme.hint;
+        }
+
+        // ------------------------------------------------------------ NOTIFICATIONS
+        // The list (src/toast.rs), as a console's: Today and Earlier, the chosen row outlined.
+        if root.overlay == 17: Rectangle {
+            property <bool> entered: false;
+            init => { entered = true; }
+            property <bool> on: entered && root.closing != 17;
+            opacity: on ? 1 : 0;
+            transform-scale: on ? 1 : 0.985;
+            animate opacity { duration: 260ms; easing: ease-out-quad; }
+            animate transform-scale { duration: 420ms; easing: ease-out-expo; }
+            Wallpaper { kind: root.wallpaper-kind == 0 ? 1 : root.wallpaper-kind; image: root.wallpaper-image; }
+            Rectangle { background: @linear-gradient(180deg, #04060ecc 0%, #04060ee6 40%, #04060ef2 100%); }
+            TouchArea {}
+            HorizontalLayout {
+                x: (96px * S.k); y: (40px * S.k); height: (64px * S.k);
+                spacing: (18px * S.k); alignment: start;
+                Image { source: Icons.bell; colorize: Theme.text; width: (34px * S.k); height: self.width; y: (15px * S.k); }
+                Text { text: "Notifications"; font-size: (36px * S.t); font-weight: 600; color: Theme.text; vertical-alignment: center; }
+            }
+            if root.notes.length == 0: VerticalLayout {
+                y: (root.height - self.height) / 2; width: root.width; height: self.preferred-height;
+                spacing: (12px * S.k);
+                HorizontalLayout { alignment: center;
+                    Rectangle { width: (96px * S.k); height: self.width; border-radius: self.width / 2; background: #ffffff12;
+                        Image { source: Icons.bell; colorize: Theme.text2; width: (44px * S.k); height: self.width; } } }
+                Text { text: "No notifications"; font-size: (30px * S.k); font-weight: 600; color: Theme.text; horizontal-alignment: center; }
+                Text { text: "Downloads, games ready to play and updates show up here."; font-size: (19px * S.k); color: Theme.text2; horizontal-alignment: center; }
+            }
+            if root.notes.length > 0: Flickable {
+                property <length> w: min((1080px * S.k), root.width - (192px * S.k));
+                x: (root.width - self.w) / 2 - (4px * S.k);
+                y: (130px * S.k);
+                width: self.w + (8px * S.k);
+                height: root.height - self.y - (90px * S.k);
+                // The chosen row in view.
+                content-y: -max(0px, min(root.idx * (82px * S.k) - self.height / 2, list-n.preferred-height - self.height));
+                animate content-y { duration: 260ms; easing: ease-out-quart; }
+                interactive: false;
+                list-n := VerticalLayout {
+                    width: parent.width;
+                    padding: (4px * S.k);
+                    spacing: 0;
+                    for n[i] in root.notes: VerticalLayout {
+                        property <bool> f: root.zone == Zone.notes && root.idx == i;
+                        property <bool> shown: false;
+                        init => { self.shown = true; }
+                        opacity: self.shown ? 1 : 0;
+                        animate opacity { duration: 240ms; delay: min(i, 10) * 25ms; easing: ease-out-quad; }
+                        if n.group != "": Text {
+                            text: n.group == "TODAY" ? "Today" : "Earlier";
+                            height: (44px * S.k); vertical-alignment: bottom;
+                            font-size: (17px * S.k); font-weight: 600; color: Theme.hint;
+                        }
+                        Rectangle {
+                            height: (78px * S.k);
+                            border-radius: (14px * S.k);
+                            background: f ? #ffffff1c : ta-n.has-hover ? #ffffff0d : transparent;
+                            border-width: (3px * S.k);
+                            border-color: f ? #f5f7fb : #f5f7fb00;
+                            animate background, border-color { duration: 160ms; }
+                            if !f: Rectangle { x: (20px * S.k); y: parent.height - 1px; width: parent.width - (40px * S.k); height: 1px; background: #ffffff14; }
+                            HorizontalLayout {
+                                padding-left: (22px * S.k); padding-right: (22px * S.k);
+                                spacing: (18px * S.k);
+                                Rectangle {
+                                    width: (44px * S.k); height: self.width; y: (17px * S.k);
+                                    border-radius: self.width / 2;
+                                    background: (n.kind == 1 ? Theme.ok : n.kind == 2 ? Theme.warn : n.kind == 3 ? Theme.danger : Theme.accent).with-alpha(0.22);
+                                    Image { source: Icons.get(n.icon); colorize: n.kind == 1 ? Theme.ok : n.kind == 2 ? Theme.warn : n.kind == 3 ? Theme.danger : Theme.accent.brighter(0.3); width: (22px * S.k); height: self.width; }
+                                }
+                                VerticalLayout {
+                                    alignment: center; spacing: (2px * S.k); horizontal-stretch: 1;
+                                    Text { text: n.title; font-size: (20px * S.k); font-weight: n.unread ? 700 : 500; color: Theme.text; overflow: elide; }
+                                    if n.body != "": Text { text: n.body; font-size: (16px * S.k); color: Theme.text2; overflow: elide; }
+                                }
+                                Text { text: n.age; font-size: (15px * S.k); color: Theme.text3; vertical-alignment: center; }
+                                if n.unread: Rectangle { width: (10px * S.k); height: self.width; y: (34px * S.k); border-radius: self.width / 2; background: Theme.accent; }
+                            }
+                            ta-n := TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.notes, i); } }
+                        }
+                    }
+                    // Clear all, at the end.
+                    Rectangle {
+                        property <bool> f: root.zone == Zone.notes && root.idx == root.notes.length;
+                        height: (64px * S.k);
+                        border-radius: (14px * S.k);
+                        background: f ? #ff5a6a33 : ta-c.has-hover ? #ffffff0d : transparent;
+                        border-width: (3px * S.k);
+                        border-color: f ? #ff8a9a : #ff8a9a00;
+                        animate background, border-color { duration: 160ms; }
+                        Text { x: (22px * S.k); text: "Clear all"; font-size: (19px * S.k); font-weight: 500; color: #ff8a9a; vertical-alignment: center; }
+                        ta-c := TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.notes, root.notes.length); } }
+                    }
                 }
             }
-            TouchArea { mouse-cursor: pointer; clicked => { root.toast-dismiss(); } }
+            HorizontalLayout {
+                x: root.width - self.width - (96px * S.k); y: root.height - (60px * S.k);
+                width: self.preferred-width; height: (26px * S.k);
+                spacing: (22px * S.k);
+                for h in root.pad-hints ? [{ k: "✕", l: "Open" }, { k: "□", l: "Delete" }, { k: "○", l: "Back" }] : [{ k: "Enter", l: "Open" }, { k: "T", l: "Delete" }, { k: "Esc", l: "Back" }]: HorizontalLayout {
+                    spacing: (8px * S.k);
+                    KeyCap { text: h.k; round: root.pad-hints; }
+                    Text { text: h.l; font-size: (16px * S.k); color: Theme.hint; vertical-alignment: center; }
+                }
+            }
         }
 
         // ------------------------------------------------------------ KEYBOARD CONTROLS

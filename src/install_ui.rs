@@ -135,8 +135,11 @@ impl App {
             // Seen going (not just found that way at start): a notification says how it ended.
             if previous.is_some_and(|p| p.active()) {
                 match record.state {
-                    installer::State::Installed => self.toast("Ready to play", &record.name, "play", crate::toast::DONE),
-                    installer::State::Failed => self.toast("Couldn't install", &record.name, "alert", crate::toast::FAILED),
+                    installer::State::Installed => self.notify(crate::toast::Cat::Installs, crate::toast::DONE, "play", "Ready to play", &record.name,
+                        record.path.as_ref().map_or(crate::toast::Action::Downloads(record.key.clone()), |p| crate::toast::Action::Play(p.to_string_lossy().into_owned())),
+                        &format!("dl:{}", record.key), true),
+                    installer::State::Failed => self.notify(crate::toast::Cat::Installs, crate::toast::FAILED, "alert", "Couldn't install", &record.name,
+                        crate::toast::Action::Downloads(record.key.clone()), &format!("dl:{}", record.key), true),
                     _ => {}
                 }
             }

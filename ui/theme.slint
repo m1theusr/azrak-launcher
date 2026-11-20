@@ -72,6 +72,7 @@ export global Icons {
     out property <image> palette: @image-url("../assets/icons/palette.svg");
     out property <image> sound: @image-url("../assets/icons/sound.svg");
     out property <image> download: @image-url("../assets/icons/download.svg");
+    out property <image> bell: @image-url("../assets/icons/bell.svg");
     out property <image> spinner: @image-url("../assets/icons/spinner.svg");
     out property <image> wifi: @image-url("../assets/icons/wifi.svg");
     out property <image> lock: @image-url("../assets/icons/lock.svg");
@@ -98,7 +99,7 @@ export global Icons {
             : name == "lock" ? lock : name == "shift" ? shift : name == "eye" ? eye : name == "eye-off" ? eye-off
             : name == "pause" ? pause : name == "close" ? close : name == "trash" ? trash : name == "retry" ? retry
             : name == "unshare" ? unshare : name == "share" ? share : name == "more" ? more
-            : name == "alert" ? alert : name == "gamepad" ? gamepad : name == "sparkle" ? sparkle : name == "palette" ? palette : name == "sound" ? sound : name == "download" ? download : name == "wifi" ? wifi : none;
+            : name == "alert" ? alert : name == "gamepad" ? gamepad : name == "sparkle" ? sparkle : name == "palette" ? palette : name == "sound" ? sound : name == "download" ? download : name == "bell" ? bell : name == "wifi" ? wifi : none;
     }
 }
 
@@ -134,6 +135,7 @@ export global Zone {
     out property <int> control-center: 27;
     out property <int> home-peek: 28;
     out property <int> welcome: 29;
+    out property <int> notes: 30;
 }
 
 // dot: KytyPS5 compatibility level (0 none, 1 in-game, 2 menus, 3 boots, 4 doesn't boot, 5 untested)
@@ -184,7 +186,9 @@ export struct TileData {
 // One of the Welcome tile's widgets: an icon, what it is, the figure that matters and a line
 // under it; `progress` (0..1, or below 0 for none) draws a bar; kind: the Fact colours.
 // A notification (src/toast.rs): kind 0 info, 1 done, 2 warning, 3 failed.
-export struct ToastData { title: string, sub: string, icon: string, kind: int }
+export struct ToastData { title: string, sub: string, icon: string, kind: int, id: int, time: string }
+// A row of the notifications list: `group` ("TODAY", "EARLIER") when it starts one.
+export struct NoteRow { group: string, title: string, body: string, age: string, kind: int, icon: string, unread: bool, has-action: bool }
 
 export struct WidgetData { icon: int /* src/welcome.rs Icons */, title: string, value: string, sub: string, progress: float, kind: int }
 

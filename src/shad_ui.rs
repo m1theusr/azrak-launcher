@@ -143,6 +143,8 @@ impl App {
                 app.set_status("", false);
                 match res {
                     Ok(()) => {
+                        app.notify(crate::toast::Cat::Updates, crate::toast::DONE, "check", "shadPS4 updated", &crate::shad::pretty(&crate::shad::load_state().installed),
+                            crate::toast::Action::Settings("UPDATES".into()), "shad-update", false);
                         // The version shows in Settings → Updates; a game waiting for it starts.
                         if let Some(id) = launch_after.or(app.shad.launch_after.take()) {
                             app.shad.launch_after = None;

@@ -88,6 +88,10 @@ impl App {
 
     /// PS outside a game: the Control Center, over whatever the launcher shows.
     fn cc_from_pad(&mut self) {
+        // A notification on screen: PS opens the list on it, as on a console.
+        if self.overlay == Overlay::None {
+            if let Some(id) = self.popup_showing() { return self.open_notifications(Some(id)); }
+        }
         if !crate::display::window_has_focus(&self.ui()) {
             std::thread::spawn(|| { overlay::focus_main(); });
         }
@@ -276,11 +280,14 @@ impl App {
             // The panel's slide away, before the picture.
             std::thread::sleep(Duration::from_millis(if was_open { 450 } else { 50 }));
             let result = overlay::screenshot(&path);
+            let path_s = path.to_string_lossy().into_owned();
             let _ = slint::invoke_from_event_loop(move || with_app(move |app| match result {
                 Ok(()) => {
                     app.last_capture = Some(name.trim_end_matches(".png").to_string());
                     audio::play(Sound::Select);
-                    app.toast("Screenshot saved", &format!("Pictures → SwarmPlay → {}", folder.trim()), "check", crate::toast::DONE);
+                    // The answer to the player's own press: shown even in a game, as on a console.
+                    app.notify(crate::toast::Cat::Games, crate::toast::DONE, "check", "Screenshot saved", &format!("Pictures → SwarmPlay → {}", folder.trim()),
+                        crate::toast::Action::File(path_s.clone()), "", true);
                 }
                 Err(e) => app.toast("No screenshot", &e, "alert", crate::toast::FAILED),
             }));
@@ -290,7 +297,7 @@ impl App {
     /// A notification while a game is in front: over the game, without taking its input.
     /// False when it can't show there (it shows in the launcher as always).
     pub fn ov_toast(&mut self, toast: &ToastData, seq: u64) -> bool {
-        if !self.in_game() || !self.cfg.lock().unwrap().overlay_toasts || self.ov_helper != Helper::Ready
+        if !self.in_game() || self.ov_helper != Helper::Ready
             || overlay::desktop() == Desktop::SteamGameMode {
             return false;
         }
@@ -341,10 +348,6 @@ impl App {
         };
         r.hint = "PS in a game: the panel over it · hold PS: Home · Share: a screenshot · keyboard: bind swarmplay --overlay to a key".into();
         let mut rows = vec![(SId::OverlayHelper, r)];
-        let mut r = row(2, "Notifications during games");
-        r.on = cfg.overlay_toasts;
-        r.hint = "Small ones in the corner, over the game, that don't take its controls".into();
-        rows.push((SId::OverlayToasts, r));
         let mut r = row(2, "Pause the game while the overlay is open");
         r.on = cfg.overlay_pause;
         r.hint = "The game stops under the panel (a few games' sound may stutter)".into();
