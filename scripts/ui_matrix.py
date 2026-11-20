@@ -45,11 +45,13 @@ STEPS = [
     ("08b-menu-beside", ["Escape", "Down", "Right", "Return", "sleep:0.6"]),           # from the ··· button: beside it
     ("09-settings", ["Escape", "Escape", "Escape", "sleep:0.5", "s", "sleep:0.8"]),   # the first page: sections
     ("09b-settings-games", ["Return", "sleep:0.6"]),                                 # a section's page
+    ("09b2-notification", ["Down", "Down", "Down", "Return", "sleep:0.9"]),          # Rescan: a notification
     ("09c-settings-theme", ["Escape", "Down", "Down", "Down", "Down", "Return", "Right", "sleep:0.8"]),  # Wallpaper: Deep blue
     ("09d-settings-themed", ["Escape", "sleep:0.6"]),                                # back on the first page, themed
     ("10-settings-bottom", ["Down"] * 12 + ["sleep:0.8"]),                           # Quit, at the end
     ("11-toasts", ["Escape", "sleep:0.5", "Home", "Down", "Right", "Right", "Right", "Return", "sleep:0.4",
                    "Up", "Right", "Right", "Down", "Return", "sleep:0.8"]),
+    ("12-power", ["Escape", "Escape", "F1", "sleep:0.7", "Down", "Right", "Right", "Right", "Return", "sleep:0.6"]),  # Control Center → Power
 ]
 
 

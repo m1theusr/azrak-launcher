@@ -132,6 +132,14 @@ impl App {
             let previous = self.install_states.insert(record.key.clone(), record.state);
             if previous == Some(record.state) { continue; }
             changed = true;
+            // Seen going (not just found that way at start): a notification says how it ended.
+            if previous.is_some_and(|p| p.active()) {
+                match record.state {
+                    installer::State::Installed => self.toast("Ready to play", &record.name, "play", crate::toast::DONE),
+                    installer::State::Failed => self.toast("Couldn't install", &record.name, "alert", crate::toast::FAILED),
+                    _ => {}
+                }
+            }
             if record.state == installer::State::Installed {
                 if let Some(path) = record.path.as_ref().filter(|path| crate::library::read_param(path).is_some()) {
                     if let Some(parent) = path.parent() {

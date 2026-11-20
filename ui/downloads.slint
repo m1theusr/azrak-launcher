@@ -144,13 +144,24 @@ export component DownloadsPage inherits Rectangle {
     }
 
     // Nothing yet, or nothing under this filter.
+    // Quiet and centred, as a console's empty list.
     if !root.any: VerticalLayout {
-        x: (120px * S.k); y: (300px * S.k); width: (900px * S.k); height: self.preferred-height;
+        x: (root.width - self.width) / 2; y: (root.height - self.height) / 2 - (40px * S.k);
+        width: min((760px * S.k), root.width - (192px * S.k)); height: self.preferred-height;
         spacing: (14px * S.k); alignment: start;
-        Text { text: root.has-any ? root.empty-title : "Nothing downloading"; font-size: (52px * S.k); font-weight: 700; color: Theme.text; }
+        HorizontalLayout {
+            alignment: center;
+            Rectangle {
+                width: (96px * S.k); height: self.width; border-radius: self.width / 2;
+                background: #ffffff12;
+                Image { source: Icons.disk; colorize: Theme.text2; width: (44px * S.k); height: self.width; }
+            }
+        }
+        Rectangle { height: (10px * S.k); }
+        Text { text: root.has-any ? root.empty-title : "No downloads"; font-size: (34px * S.k); font-weight: 600; color: Theme.text; horizontal-alignment: center; }
         Text {
             text: root.has-any ? "Switch filters with " + (root.pad ? "L1 and R1." : "Q and E.") : "Pick a game in the Library and press Download. It installs by itself when it's done.";
-            font-size: (22px * S.k); color: Theme.text2; wrap: word-wrap;
+            font-size: (20px * S.k); color: Theme.text2; wrap: word-wrap; horizontal-alignment: center;
         }
     }
 

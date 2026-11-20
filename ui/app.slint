@@ -1,4 +1,4 @@
-import { S, Theme, Icons, Zone, DownloadData, DlTab, DlChoice, SetupFile, BootStep, OsiDisk, WjKey, ChipData, ActionData, TileData, HeroData, CardData, CardRow, GenreChip, Fact, FactRow, Shot, HubData, WidgetData, SettingData, SettingSection, MenuItem, RunningData } from "theme.slint";
+import { S, Theme, Icons, Zone, DownloadData, DlTab, DlChoice, SetupFile, BootStep, OsiDisk, WjKey, ChipData, ActionData, TileData, HeroData, CardData, CardRow, GenreChip, Fact, FactRow, Shot, HubData, WidgetData, ToastData, SettingData, SettingSection, MenuItem, RunningData } from "theme.slint";
 import { FocusRing, Chip, Btn, Kicker, Badge, Switch, KeyCap, KeyboardKey, BackButton, Shimmer, Cover } from "widgets.slint";
 import { DownloadsPage, DownloadConsent, DownloadPanel, Capsule } from "downloads.slint";
 import { LibraryFilter, LibrarySortPicker } from "library.slint";
@@ -355,8 +355,13 @@ export component AppWindow inherits Window {
 
     in property <string> menu-title;
     in property <[MenuItem]> menu-items;
-    // Where the Options menu opens: 0 the middle, 1 beside Home's ··· button.
+    // Where the Options menu opens: 0 the middle, 1 beside Home's ··· button, 2 the bottom right
+    // corner (Power, from the Control Center).
     in property <int> menu-anchor;
+    // The notification at the top right (src/toast.rs).
+    in property <ToastData> toast;
+    in property <bool> toast-shown;
+    callback toast-dismiss();
 
     in property <bool> boot-first;
     // Started with "Try AzrakOS" on the USB stick, right after "Welcome to AzrakOS": this screen
@@ -2211,10 +2216,12 @@ export component AppWindow inherits Window {
                 property <bool> anchored: root.menu-anchor == 1;
                 width: (440px * S.k);
                 height: menu-col.preferred-height;
-                x: anchored ? (440px * S.k) : (root.width - self.width) / 2;
-                // Its bottom level with the hero's buttons (see HeroView's place on Home).
-                y: anchored ? max((110px * S.k), root.height - (196px * S.k) - self.height + (entered ? 0 : (16px * S.k)))
-                    : (root.height - self.height) / 2 + (entered ? 0 : (16px * S.k));
+                x: anchored ? (440px * S.k) : root.menu-anchor == 2 ? root.width - self.width - (96px * S.k) : (root.width - self.width) / 2;
+                // Its bottom level with the hero's buttons (see HeroView's place on Home); Power's
+                // by the bottom corner, where the Control Center's Power was.
+                y: (anchored ? max((110px * S.k), root.height - (196px * S.k) - self.height)
+                    : root.menu-anchor == 2 ? root.height - self.height - (72px * S.k)
+                    : (root.height - self.height) / 2) + (entered ? 0 : (16px * S.k));
                 opacity: entered ? 1 : 0;
                 animate opacity { duration: 180ms; easing: ease-out-quad; }
                 animate y { duration: 300ms; easing: ease-out-expo; }
@@ -3436,6 +3443,43 @@ export component AppWindow inherits Window {
                     Text { text: "Close"; font-size: (17px * S.k); color: Theme.text2; vertical-alignment: center; }
                 }
             }
+        }
+
+        // ------------------------------------------------------------ NOTIFICATION
+        // A small card at the top right, over everything: slides in, goes after five seconds
+        // (src/toast.rs). Clicked, it goes at once.
+        toast-card := Rectangle {
+            property <color> tone: root.toast.kind == 1 ? Theme.ok : root.toast.kind == 2 ? Theme.warn : root.toast.kind == 3 ? Theme.danger : Theme.accent;
+            width: min((480px * S.k), root.width - (64px * S.k));
+            height: (84px * S.k);
+            x: root.width - self.width - (root.toast-shown ? (96px * S.k) : (40px * S.k));
+            y: (108px * S.k);
+            opacity: root.toast-shown ? 1 : 0;
+            visible: self.opacity > 0;
+            animate x { duration: 420ms; easing: ease-out-expo; }
+            animate opacity { duration: 240ms; easing: ease-out-quad; }
+            border-radius: (18px * S.k);
+            background: #1a1e2bf5;
+            border-width: 1px;
+            border-color: #ffffff1f;
+            drop-shadow-blur: (32px * S.k);
+            drop-shadow-color: #00000099;
+            HorizontalLayout {
+                padding-left: (18px * S.k); padding-right: (22px * S.k);
+                spacing: (16px * S.k);
+                Rectangle {
+                    width: (48px * S.k); height: self.width; y: (18px * S.k);
+                    border-radius: self.width / 2;
+                    background: toast-card.tone.with-alpha(0.22);
+                    Image { source: Icons.get(root.toast.icon); colorize: toast-card.tone; width: (24px * S.k); height: self.width; }
+                }
+                VerticalLayout {
+                    alignment: center; spacing: (3px * S.k);
+                    Text { text: root.toast.title; font-size: (20px * S.k); font-weight: 600; color: Theme.text; overflow: elide; }
+                    if root.toast.sub != "": Text { text: root.toast.sub; font-size: (16px * S.k); color: Theme.text2; overflow: elide; }
+                }
+            }
+            TouchArea { mouse-cursor: pointer; clicked => { root.toast-dismiss(); } }
         }
 
         // ------------------------------------------------------------ KEYBOARD CONTROLS

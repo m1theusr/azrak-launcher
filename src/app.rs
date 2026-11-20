@@ -403,6 +403,8 @@ pub struct App {
     battery_read: f64,
     /// When the Welcome's widgets were last read (src/welcome.rs).
     pub welcome_read: f64,
+    /// The notification on screen (src/toast.rs): a newer one replaces it.
+    pub toast_seq: u64,
     pub power: crate::os::power::PowerAsk,
     /// This PC's processor, memory and graphics (read in the background at start).
     pub pc: Option<crate::pc::Reading>,
@@ -712,6 +714,7 @@ pub fn run(ui: AppWindow, monitors: Vec<Monitor>, target_monitor: Option<Monitor
         battery: None,
         battery_read: 0.0,
         welcome_read: 0.0,
+        toast_seq: 0,
         power: Default::default(),
         pc: None,
         pc_checking: false,
@@ -876,6 +879,7 @@ fn wire_callbacks(ui: &AppWindow) {
         with_app(move |app| app.home_wheel(dy))
     });
     ui.on_hub_wheel(|dy| with_app(move |app| app.hub_wheel(dy)));
+    ui.on_toast_dismiss(|| with_app(|app| app.ui().set_toast_shown(false)));
     ui.on_grid_scrolled(|| with_app(|app| app.push_grid_window()));
     ui.on_grid_wheel(|dy| with_app(move |app| app.grid_wheel(dy)));
     ui.on_resized(|| with_app(|app| {
@@ -2721,6 +2725,8 @@ impl App {
                 let act = self.menu_actions.get(self.idx as usize).map(|a| a.id);
                 let t = self.menu_target;
                 self.back();
+                // The Power card's (it's about no game).
+                if let (Some(act), None) = (act, t) { return self.power_choice(act); }
                 if let (Some(act), Some(t)) = (act, t) {
                     self.library_press(t, act, |app| app.run_action(act, t));
                 }

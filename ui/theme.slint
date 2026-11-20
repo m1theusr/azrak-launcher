@@ -96,7 +96,7 @@ export global Icons {
             : name == "lock" ? lock : name == "shift" ? shift : name == "eye" ? eye : name == "eye-off" ? eye-off
             : name == "pause" ? pause : name == "close" ? close : name == "trash" ? trash : name == "retry" ? retry
             : name == "unshare" ? unshare : name == "share" ? share : name == "more" ? more
-            : name == "gamepad" ? gamepad : name == "sparkle" ? sparkle : name == "palette" ? palette : name == "wifi" ? wifi : none;
+            : name == "alert" ? alert : name == "gamepad" ? gamepad : name == "sparkle" ? sparkle : name == "palette" ? palette : name == "wifi" ? wifi : none;
     }
 }
 
@@ -181,6 +181,9 @@ export struct TileData {
 
 // One of the Welcome tile's widgets: an icon, what it is, the figure that matters and a line
 // under it; `progress` (0..1, or below 0 for none) draws a bar; kind: the Fact colours.
+// A notification (src/toast.rs): kind 0 info, 1 done, 2 warning, 3 failed.
+export struct ToastData { title: string, sub: string, icon: string, kind: int }
+
 export struct WidgetData { icon: int /* src/welcome.rs Icons */, title: string, value: string, sub: string, progress: float, kind: int }
 
 export struct HeroData {

@@ -384,6 +384,14 @@ impl App {
         for job in &jobs {
             let old = self.download_states.insert(job.key.clone(), job.state);
             changed |= old != Some(job.state);
+            if old.is_some_and(|o| o.active()) && old != Some(job.state) {
+                match job.state {
+                    State::Complete if job.install_to.is_some() => self.toast("Downloaded", &format!("{} · installing now", job.name), "disk", crate::toast::INFO),
+                    State::Complete => self.toast("Downloaded", &format!("{} · ready to install", job.name), "disk", crate::toast::INFO),
+                    State::Failed => self.toast("Download stopped", &job.name, "alert", crate::toast::FAILED),
+                    _ => {}
+                }
+            }
             // A finished one installs by itself (or waits on its row); a stopped one turns the
             // ring amber.
             let speeds = self.dl_speeds.entry(job.key.clone()).or_default();

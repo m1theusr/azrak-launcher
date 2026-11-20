@@ -63,11 +63,37 @@ impl App {
                     "library" => self.switch_view(1, true),
                     "settings" => self.open_settings(),
                     "controls" => self.open_controls(),
-                    _ if crate::os::system::on_os() => self.power_ask(crate::os::power::Power::ShutDown),
-                    _ => { crate::app::quit("Control Center → Quit SwarmPlay"); }
+                    _ => self.open_power_menu(),
                 }
             }
             _ => {}
+        }
+    }
+}
+
+impl App {
+    /// Power, as a console's: a small card of choices by the corner, not straight off.
+    pub fn open_power_menu(&mut self) {
+        let mk = |id: &'static str, label: &str| ActionDef { id, label: label.into(), icon: "power", primary: false, danger: false, round: false };
+        self.menu_actions = if crate::os::system::on_os() {
+            vec![mk("power_off", "Turn off"), mk("power_restart", "Restart"), mk("app_restart", "Restart SwarmPlay")]
+        } else {
+            vec![mk("app_restart", "Restart SwarmPlay"), mk("quit", "Quit SwarmPlay")]
+        };
+        self.menu_target = None;
+        audio::play(Sound::Select);
+        self.ui().set_menu_anchor(2);
+        self.push_overlay(Overlay::Menu, Z_MENU, 0);
+        self.push_menu("Power");
+    }
+
+    /// A choice on the Power card.
+    pub fn power_choice(&mut self, id: &str) {
+        match id {
+            "power_off" => self.power_ask(crate::os::power::Power::ShutDown),
+            "power_restart" => self.power_ask(crate::os::power::Power::Restart),
+            "app_restart" => self.app_restart(),
+            _ => { crate::app::quit("Power → Quit SwarmPlay"); }
         }
     }
 }
