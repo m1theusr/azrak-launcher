@@ -42,7 +42,7 @@ impl App {
         }
         // A running game's "Back to game" comes first: Guide, then Enter, returns to it.
         self.push_overlay(Overlay::ControlCenter, Z_CONTROL_CENTER, 0);
-        audio::play(Sound::Select);
+        audio::play(Sound::Open);
     }
 
     pub fn act_control_center(&mut self, a: Act) {

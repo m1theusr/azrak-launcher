@@ -132,7 +132,9 @@ impl App {
         if self.cfg.lock().unwrap().overlay_pause {
             if let Some(pid) = self.ov_game { unsafe { libc::killpg(pid as i32, libc::SIGSTOP) }; self.ov_paused = Some(pid); }
         }
-        audio::play(Sound::Select);
+        // Over the game: the same sounds, a little quieter.
+        audio::set_over_game(true);
+        audio::play(Sound::Open);
         std::thread::spawn(move || {
             // Mapped first: the desktop finds it by its title.
             std::thread::sleep(Duration::from_millis(60));
@@ -145,6 +147,7 @@ impl App {
     pub fn ov_close(&mut self, to_game: bool) {
         if !self.ov_open { return; }
         self.ov_open = false;
+        audio::set_over_game(false);
         crate::gamepad::GRAB.store(false, Ordering::Relaxed);
         if let Some(pid) = self.ov_paused.take() { unsafe { libc::killpg(pid as i32, libc::SIGCONT) }; }
         audio::play(Sound::Back);
@@ -284,7 +287,7 @@ impl App {
             let _ = slint::invoke_from_event_loop(move || with_app(move |app| match result {
                 Ok(()) => {
                     app.last_capture = Some(name.trim_end_matches(".png").to_string());
-                    audio::play(Sound::Select);
+                    audio::play(Sound::Shutter);
                     // The answer to the player's own press: shown even in a game, as on a console.
                     app.notify(crate::toast::Cat::Games, crate::toast::DONE, "check", "Screenshot saved", &format!("Pictures → SwarmPlay → {}", folder.trim()),
                         crate::toast::Action::File(path_s.clone()), "", true);

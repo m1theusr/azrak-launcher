@@ -21,6 +21,8 @@ pub struct Config {
     pub amd_cpu: bool,
     pub extra_args: String,
     pub sounds: bool,
+    /// Interface sounds' volume: 1 Low, 2 Medium, 3 High (audio::LEVELS).
+    pub sounds_level: u8,
     pub return_on_exit: bool,
     /// Output name (e.g. "DP-2"); empty = primary display.
     pub monitor: String,
@@ -83,6 +85,7 @@ impl Default for Config {
             amd_cpu: false,
             extra_args: String::new(),
             sounds: true,
+            sounds_level: 2,
             return_on_exit: true,
             monitor: String::new(),
             kyty_auto_update: true,

@@ -76,6 +76,7 @@ OPTIONS:
                         (bind it to a key in your desktop's keyboard settings)
     --home              Bring the running SwarmPlay's Home to the front
     --screenshot        Take a screenshot of the game, as Share does
+    --sounds            Play every interface sound in turn, to hear them
     --version           Print the version
     -h, --help          Show this help
 ";
@@ -113,6 +114,10 @@ fn main() {
                 if crate::ipc::send(&a[2..]) { return; }
                 eprintln!("SwarmPlay isn't running");
                 std::process::exit(1);
+            }
+            "--sounds" => {
+                crate::audio::demo();
+                return;
             }
             "--version" | "-V" => {
                 println!("swarmplay {}", env!("CARGO_PKG_VERSION"));
