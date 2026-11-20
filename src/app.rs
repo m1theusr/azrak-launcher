@@ -886,6 +886,14 @@ fn wire_callbacks(ui: &AppWindow) {
         with_app(move |app| app.home_wheel(dy))
     });
     ui.on_hub_wheel(|dy| with_app(move |app| app.hub_wheel(dy)));
+    // The gallery's arrows and thumbnails (a thumbnail: how far from the one shown).
+    ui.on_viewer_step(|d| with_app(move |app| {
+        if app.overlay != Overlay::Viewer { return; }
+        let n = app.hub_shots.len().max(1) as i32;
+        app.viewer_i = (app.viewer_i as i32 + d).rem_euclid(n) as usize;
+        app.push_viewer();
+        audio::play(Sound::Move);
+    }));
     ui.on_toast_dismiss(|| with_app(|app| app.ui().set_toast_shown(false)));
     ui.on_grid_scrolled(|| with_app(|app| app.push_grid_window()));
     ui.on_grid_wheel(|dy| with_app(move |app| app.grid_wheel(dy)));

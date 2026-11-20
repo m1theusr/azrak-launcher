@@ -20,7 +20,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from ui_fixture import NO_UPDATES, install_game, seed_cache
+from ui_fixture import NO_UPDATES, install_game, seed_cache, seed_downloads
 
 ROOT = Path(__file__).resolve().parent.parent
 SIZES = ["1280x720", "1366x768", "1920x1080", "1920x1200", "2560x1440", "3440x1440", "3840x2160", "1280x800"]
@@ -37,6 +37,8 @@ STEPS = [
     ("03-hub", ["Return", "sleep:1.5"]),   # the Compatibility card opens the Hub (never Play)
     ("03b-hub-up-to-home", ["Up", "sleep:1"]),              # Up from the Hub's top: back to the cards
     ("04-hub-scrolled", ["Down", "sleep:1.2", "Down", "Down", "sleep:0.8"]),
+    ("04a-gallery", ["Return", "sleep:1.2", "Right", "sleep:1"]),                 # a screenshot, full screen
+    ("04a2-back-in-hub", ["Escape", "sleep:0.6"]),
     ("04b-hub-details", ["Down", "Return", "sleep:0.8"]),
     ("05-library", ["Escape", "Escape", "Up", "Up", "Right", "Return", "sleep:1.5"]),
     ("06-library-down", ["Down", "Down", "Down", "sleep:1"]),
@@ -72,7 +74,8 @@ def shoot(size: str, n: int, out: Path, binary: Path, game: Path | None):
     fake.write_text("#!/bin/sh\nexit 0\n")
     fake.chmod(0o755)
     (home / ".config/azrak/config.json").write_text(json.dumps(
-        {"game_dirs": ["~/Games"], "sounds": False, **NO_UPDATES, "emulator": str(fake)}))
+        {"game_dirs": ["~/Games"], "sounds": False, **NO_UPDATES, "emulator": str(fake), "seed_after_download": False}))
+    seed_downloads(home)
     # No browsers or players may pop up; pretend to be an old version so the update notification shows.
     stubs = work / "stubs"
     stubs.mkdir()

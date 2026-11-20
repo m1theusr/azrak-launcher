@@ -355,6 +355,9 @@ export component AppWindow inherits Window {
     in property <bool> power-busy;
 
     in property <string> menu-title;
+    // The gallery's picture shown, by its place among the Hub's screenshots.
+    in property <int> viewer-index;
+    callback viewer-step(int);
     in property <[MenuItem]> menu-items;
     // Where the Options menu opens: 0 the middle, 1 beside Home's ··· button, 2 the bottom right
     // corner (Power, from the Control Center).
@@ -2172,35 +2175,76 @@ export component AppWindow inherits Window {
         }
 
         // ------------------------------------------------------------ SCREENSHOT VIEWER
+        // A gallery, as a console's: the picture full screen, the others in a strip under it
+        // (the one shown outlined), arrows at the sides for the mouse.
         if root.overlay == 3: Rectangle {
             property <bool> entered: false;
             init => { entered = true; }
             opacity: entered ? 1 : 0;
             animate opacity { duration: 200ms; easing: ease-out-quad; }
-            background: #000000f2;
+            background: #000000;
+            TouchArea { clicked => { root.click(Zone.shots, -1); } }
             Image {
-                x: (48px * S.k);
-                y: (104px * S.k);
-                width: root.width - (96px * S.k);
-                height: root.height - (160px * S.k);
+                width: root.width;
+                height: root.height;
                 source: root.viewer-image;
                 image-fit: contain;
+                transform-scale: entered ? 1 : 1.03;
+                animate transform-scale { duration: 420ms; easing: ease-out-expo; }
             }
-            Rectangle {
-                x: root.width - self.width - (48px * S.k);
-                y: root.height - self.height - (36px * S.k);
-                width: vc.preferred-width + (28px * S.k);
-                height: (36px * S.k);
-                border-radius: (18px * S.k);
-                background: #000000b3;
-                vc := Text { text: root.viewer-count + "   ◂ ▸ to browse · Esc to close"; font-size: (16px * S.k); color: Theme.text2; }
-            }
-            TouchArea { clicked => { root.click(Zone.shots, -1); } }
+            Rectangle { height: (150px * S.k); y: 0; background: @linear-gradient(180deg, #000000b3 0%, #00000000 100%); }
+            Rectangle { height: (230px * S.k); y: root.height - self.height; background: @linear-gradient(0deg, #000000d9 0%, #00000000 100%); }
             BackButton {
                 x: (48px * S.k);
                 y: (36px * S.k);
                 pad: root.pad-hints;
                 clicked => { root.click(Zone.shots, -1); }
+            }
+            Text {
+                x: root.width - self.width - (56px * S.k); y: (46px * S.k);
+                text: root.viewer-count; font-size: (19px * S.k); font-weight: 500; color: Theme.text2;
+            }
+            // Arrows at the sides.
+            for d[k] in [-1, 1]: Rectangle {
+                x: d < 0 ? (40px * S.k) : root.width - self.width - (40px * S.k);
+                y: (root.height - self.height) / 2;
+                width: (64px * S.k); height: self.width;
+                border-radius: self.width / 2;
+                background: ta-arrow.has-hover ? #ffffff33 : #00000066;
+                border-width: 1px; border-color: #ffffff26;
+                animate background { duration: 120ms; }
+                Image { source: d < 0 ? Icons.chevl : Icons.chevr; colorize: Theme.text; width: (32px * S.k); height: self.width; }
+                ta-arrow := TouchArea { mouse-cursor: pointer; clicked => { root.viewer-step(d); } }
+            }
+            // The strip: every screenshot, the one shown centred and outlined.
+            strip := Rectangle {
+                property <length> tw: (176px * S.k);
+                property <length> th: (99px * S.k);
+                property <length> gap: (14px * S.k);
+                y: root.height - self.th - (40px * S.k);
+                height: self.th + (8px * S.k);
+                clip: false;
+                Rectangle {
+                    x: root.width / 2 - strip.tw / 2 - root.viewer-index * (strip.tw + strip.gap);
+                    animate x { duration: 320ms; easing: ease-out-quart; }
+                    for s[i] in root.hub.shots: Rectangle {
+                        property <bool> cur: i == root.viewer-index;
+                        x: i * (strip.tw + strip.gap);
+                        y: (4px * S.k);
+                        width: strip.tw;
+                        height: strip.th;
+                        opacity: cur ? 1 : 0.55;
+                        animate opacity { duration: 200ms; }
+                        FocusRing { w: parent.width; h: parent.height; on: parent.cur; radius: (10px * S.k); glow: false; }
+                        Rectangle {
+                            border-radius: (10px * S.k);
+                            clip: true;
+                            background: Theme.panel;
+                            Image { source: s.image; width: parent.width; height: parent.height; image-fit: cover; }
+                        }
+                        TouchArea { mouse-cursor: pointer; clicked => { root.viewer-step(i - root.viewer-index); } }
+                    }
+                }
             }
         }
 
@@ -3416,7 +3460,7 @@ export component AppWindow inherits Window {
                     x: (48px * S.k);
                     y: (84px * S.k);
                     spacing: (2px * S.k);
-                    Text { text: "TRAILER"; font-size: (14px * S.k); font-weight: 600; letter-spacing: (2px * S.k); color: Theme.text3; }
+                    Text { text: "Trailer"; font-size: (17px * S.k); font-weight: 500; color: Theme.hint; }
                     Text { text: root.trailer-title; font-size: (26px * S.k); font-weight: 600; color: Theme.text; }
                 }
             }
@@ -3439,7 +3483,7 @@ export component AppWindow inherits Window {
                         width: parent.width * clamp(root.trailer-progress, 0, 1);
                         height: parent.height;
                         border-radius: parent.border-radius;
-                        background: #ffffff;
+                        background: Theme.accent.brighter(0.3);
                     }
                     TouchArea {
                         y: -(12px * S.k);
