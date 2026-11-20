@@ -2,6 +2,8 @@
 
 # SwarmPlay
 
+**Website: [swarmplayhq.github.io](https://swarmplayhq.github.io)**
+
 SwarmPlay is a fork of [Azrak Launcher](https://github.com/AzrakHQ/azrak-launcher) (MIT), with fixes
 for Fedora Atomic/Bazzite, PS5 PFS (`.ffpfsc`) images and a console-style redesign. The game
 catalog still comes from Azrak Launcher. Its settings and data stay in the same folders
@@ -31,10 +33,16 @@ You need 64-bit Linux: Ubuntu 22.04+, Debian 12+, Fedora 36+, Mint 21+, Arch or 
 Open a terminal and run:
 
 ```bash
-git clone https://github.com/m1theusr/azrak-launcher.git swarmplay && cd swarmplay && ./install.sh
+curl -fsSL https://github.com/swarmplayhq/swarmplay/releases/latest/download/swarmplay-linux-x86_64.tar.gz | tar xz && ./swarmplay-linux-x86_64/install.sh
 ```
 
-It builds from source (Rust, `pkg-config` and the fontconfig and xkbcommon development packages;
+That's the ready-made build (it needs glibc 2.35+). Or build it yourself:
+
+```bash
+git clone https://github.com/swarmplayhq/swarmplay.git && cd swarmplay && ./install.sh
+```
+
+That builds from source (Rust, `pkg-config` and the fontconfig and xkbcommon development packages;
 the script says what to install). **SwarmPlay** is now in your app menu. For trailers, switching between a game and the
 launcher, and installing from archives, also run (Ubuntu, Debian, Mint):
 

@@ -1,6 +1,6 @@
 ---
 name: azrak-fork
-description: Build, test, install, update and release SwarmPlay, the user's fork of Azrak Launcher (github.com/m1theusr/azrak-launcher, a Rust/Slint game launcher) on their Bazzite machine. Use when asked to rebuild/reinstall Azrak, pull upstream changes into the fork, debug Azrak install/library problems, change the launcher's code, or publish a fork release.
+description: Build, test, install, update and release SwarmPlay, the user's fork of Azrak Launcher (github.com/swarmplayhq/swarmplay, website swarmplayhq.github.io from github.com/swarmplayhq/swarmplayhq.github.io, a Rust/Slint game launcher) on their Bazzite machine. Use when asked to rebuild/reinstall Azrak, pull upstream changes into the fork, debug Azrak install/library problems, change the launcher's code, or publish a fork release.
 ---
 
 # SwarmPlay (fork of Azrak Launcher)
@@ -10,7 +10,7 @@ menu entry `swarmplay.desktop`). The Cargo package, data folders (`util::APP_NAM
 (`.azrak-owned`, `.azrak-game.json`), the game catalog (`update::REPO`) and AzrakOS keep upstream's names on
 purpose: installs keep working and upstream merges stay easy.
 
-- Source: `~/Projects/azrak-launcher` (`origin` = m1theusr/azrak-launcher, `upstream` = AzrakHQ/azrak-launcher).
+- Source: `~/Projects/azrak-launcher` (`origin` = swarmplayhq/swarmplay, `upstream` = AzrakHQ/azrak-launcher).
 - Installed binary: `~/.local/bin/swarmplay` (previous one kept as `swarmplay.previous`). Menu entry: `~/.local/share/applications/swarmplay.desktop`.
 - User data: config `~/.config/azrak/config.json`, download jobs `~/.config/azrak/transfers/jobs.json`,
   install records `~/.config/azrak/installs/jobs.json`, emulators `~/.local/share/azrak`, cache `~/.cache/azrak`.
@@ -25,9 +25,9 @@ Every fix or customization goes through a pull request into the fork's `main`:
 1. `git checkout main && git pull --ff-only origin main && git checkout -b fix/<short-name>` (or `feat/<short-name>`).
 2. Make the change with tests; build and run the full suite (below). One topic per branch, one commit per logical change.
 3. `git push -u origin <branch>` and open the PR **on the fork**, always passing the repo explicitly, or `gh`
-   targets upstream: `gh pr create --repo m1theusr/azrak-launcher --base main --head <branch> ...`
+   targets upstream: `gh pr create --repo swarmplayhq/swarmplay --base main --head <branch> ...`
    (summary + test plan; end the body with the Claude Code attribution line).
-4. Merge with a merge commit, `gh pr merge <n> --repo m1theusr/azrak-launcher --merge`, then sync local `main`
+4. Merge with a merge commit, `gh pr merge <n> --repo swarmplayhq/swarmplay --merge`, then sync local `main`
    and install the build.
 
 Never push to `AzrakHQ/azrak-launcher` and never open a PR there unless the user asks for that specific change.

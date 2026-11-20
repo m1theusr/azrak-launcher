@@ -14,9 +14,10 @@ use std::time::Duration;
 
 /// Upstream: where the game catalog is published.
 pub const REPO: &str = "AzrakHQ/azrak-launcher";
-/// Where this build updates itself from: the fork, so an upstream release never replaces it.
+/// Where this build updates itself from: SwarmPlay's own repo, so an upstream release never replaces it
+/// (copies from before the move asked m1theusr/azrak-launcher; GitHub redirects that here).
 /// `AZRAK_UPDATE_REPO` overrides it.
-const UPDATE_REPO: &str = "m1theusr/azrak-launcher";
+const UPDATE_REPO: &str = "swarmplayhq/swarmplay";
 const ASSET: &str = "swarmplay-linux-x86_64.tar.gz";
 const CHECK_INTERVAL: f64 = 6.0 * 3600.0;
 
