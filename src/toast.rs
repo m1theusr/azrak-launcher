@@ -17,8 +17,11 @@ impl App {
         self.toast_seq += 1;
         let seq = self.toast_seq;
         let ui = self.ui();
-        ui.set_toast(ToastData { title: title.into(), sub: sub.into(), icon: icon.into(), kind });
+        let data = ToastData { title: title.into(), sub: sub.into(), icon: icon.into(), kind };
+        ui.set_toast(data.clone());
         ui.set_toast_shown(true);
+        // With a game in front, over the game too.
+        self.ov_toast(&data, seq);
         slint::Timer::single_shot(Duration::from_secs(5), move || with_app(move |app| {
             // Still this one (not one shown since): it goes.
             if app.toast_seq == seq { app.ui().set_toast_shown(false); }

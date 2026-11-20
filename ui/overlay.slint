@@ -1,0 +1,229 @@
+// The in-game overlay (src/overlay_ui.rs): a second, see-through window over a running game.
+// The PS button brings the panel up from the bottom, as on a console; notifications show in the
+// top right corner without taking the game's input. Laid out on the same 1920×1080 canvas as
+// the launcher (S.k), in the theme's colours.
+
+import { S, Theme, Icons, ToastData } from "theme.slint";
+import { FocusRing } from "widgets.slint";
+
+export component OverlayWindow inherits Window {
+    title: "SwarmPlay Overlay";
+    no-frame: true;
+    background: transparent;
+    default-font-family: "Inter";
+
+    // The panel is up (else only a notification, or nothing, shows).
+    in property <bool> open;
+    // Focus: 0 Back to game, 1 Close game, 2 Downloads, 3 Capture | 4 Home, 5 Sound, 6 Settings, 7 Power.
+    in property <int> idx;
+    in property <bool> pad-hints: true;
+    in property <string> game-name;
+    in property <string> game-time;
+    // "Close game" was pressed once: pressing it again closes it.
+    in property <bool> confirm-close;
+    in property <string> dl-title;
+    in property <string> dl-sub;
+    in property <float> dl-progress: -1;
+    in property <string> capture-sub;
+    in property <string> volume;
+    in property <float> volume-level;
+    in property <string> pad-battery;
+    in property <string> clock;
+    in property <ToastData> toast;
+    in property <bool> toast-shown;
+    callback click(int);
+    callback key(string);
+
+    forward-focus: keys;
+    keys := FocusScope {
+        key-pressed(e) => { root.key(e.text); accept }
+    }
+
+    // The game, dimmed behind the panel.
+    Rectangle {
+        background: #04060e;
+        opacity: root.open ? 0.55 : 0;
+        animate opacity { duration: 240ms; easing: ease-out-quad; }
+        TouchArea { enabled: root.open; clicked => { root.click(-1); } }
+    }
+
+    // ---- The panel, from the bottom.
+    panel := Rectangle {
+        property <length> h: (430px * S.k);
+        y: root.open ? root.height - self.h : root.height + (20px * S.k);
+        height: self.h;
+        animate y { duration: 360ms; easing: ease-out-expo; }
+        background: #0f1424f5;
+        border-width: 1px;
+        border-color: #ffffff1c;
+        drop-shadow-blur: (40px * S.k);
+        drop-shadow-color: #00000099;
+        TouchArea {}
+
+        // Top row: the game, the downloads, a screenshot.
+        HorizontalLayout {
+            x: (96px * S.k); y: (36px * S.k);
+            height: (190px * S.k);
+            spacing: (20px * S.k);
+            alignment: start;
+            Rectangle {
+                width: (640px * S.k);
+                border-radius: (20px * S.k);
+                background: #1c2440;
+                VerticalLayout {
+                    padding: (22px * S.k);
+                    spacing: (6px * S.k);
+                    Text { text: "PLAYING" + (root.game-time != "" ? " · " + root.game-time : ""); font-size: (15px * S.k); font-weight: 600; letter-spacing: (1.5px * S.k); color: Theme.text2; }
+                    Text { text: root.game-name; font-size: (28px * S.k); font-weight: 600; color: Theme.text; overflow: elide; }
+                    Rectangle { vertical-stretch: 1; }
+                    HorizontalLayout {
+                        spacing: (12px * S.k);
+                        alignment: start;
+                        for b[i] in [
+                            { label: "Back to game", danger: false },
+                            { label: root.confirm-close ? "Press again to close" : "Close game", danger: true },
+                        ]: Rectangle {
+                            property <bool> f: root.idx == i;
+                            width: btn-t.preferred-width + (40px * S.k);
+                            height: (52px * S.k);
+                            border-radius: self.height / 2;
+                            background: f ? (b.danger ? Theme.danger : #f5f7fb) : ta-b.has-hover ? #ffffff2e : #ffffff1a;
+                            animate background { duration: 140ms; }
+                            btn-t := Text { text: b.label; font-size: (18px * S.k); font-weight: 600; color: f ? (b.danger ? #ffffff : #0a0d18) : Theme.text; }
+                            ta-b := TouchArea { mouse-cursor: pointer; clicked => { root.click(i); } }
+                        }
+                    }
+                }
+            }
+            for c[k] in [
+                { kicker: "DOWNLOADS", title: root.dl-title, sub: root.dl-sub, icon: 0 },
+                { kicker: "CAPTURE", title: "Take a screenshot", sub: root.capture-sub, icon: 1 },
+            ]: card := Rectangle {
+                property <bool> f: root.idx == k + 2;
+                width: (400px * S.k);
+                border-radius: (20px * S.k);
+                background: f ? #ffffff2b : ta-c.has-hover ? #ffffff1f : #1c2440;
+                animate background { duration: 140ms; }
+                FocusRing { w: parent.width; h: parent.height; on: card.f; radius: (20px * S.k); glow: false; }
+                VerticalLayout {
+                    padding: (22px * S.k);
+                    spacing: (6px * S.k);
+                    HorizontalLayout {
+                        spacing: (10px * S.k);
+                        alignment: start;
+                        Image { source: c.icon == 0 ? Icons.download : Icons.film; colorize: Theme.text2; width: (18px * S.k); height: self.width; y: (2px * S.k); }
+                        Text { text: c.kicker; font-size: (15px * S.k); font-weight: 600; letter-spacing: (1.5px * S.k); color: Theme.text2; }
+                    }
+                    Text { text: c.title; font-size: (22px * S.k); font-weight: 600; color: Theme.text; overflow: elide; }
+                    Text { text: c.sub; font-size: (16px * S.k); color: Theme.text2; overflow: elide; }
+                    Rectangle { vertical-stretch: 1; }
+                    if c.icon == 0 && root.dl-progress >= 0: Rectangle {
+                        height: (6px * S.k);
+                        border-radius: (3px * S.k);
+                        background: #ffffff1f;
+                        Rectangle {
+                            x: 0; width: parent.width * clamp(root.dl-progress, 0, 1);
+                            border-radius: parent.border-radius;
+                            background: Theme.accent.brighter(0.2);
+                            animate width { duration: 400ms; }
+                        }
+                    }
+                }
+                ta-c := TouchArea { mouse-cursor: pointer; clicked => { root.click(k + 2); } }
+            }
+        }
+
+        // Bottom row: round buttons, then the controller's battery and the clock.
+        HorizontalLayout {
+            x: (96px * S.k); y: (262px * S.k);
+            height: (110px * S.k);
+            spacing: (26px * S.k);
+            alignment: start;
+            for b[j] in [
+                { label: "Home", icon: 0 },
+                { label: root.volume, icon: 1 },
+                { label: "Settings", icon: 2 },
+                { label: "Power", icon: 3 },
+            ]: VerticalLayout {
+                property <bool> f: root.idx == j + 4;
+                spacing: (10px * S.k);
+                width: (100px * S.k);
+                HorizontalLayout {
+                    alignment: center;
+                    circle := Rectangle {
+                        width: (72px * S.k); height: self.width;
+                        border-radius: self.width / 2;
+                        background: f ? #f5f7fb : ta-i.has-hover ? #ffffff2e : #ffffff17;
+                        animate background { duration: 140ms; }
+                        transform-scale: f ? 1.06 : 1;
+                        animate transform-scale { duration: 200ms; easing: ease-out-quad; }
+                        Image {
+                            source: b.icon == 0 ? Icons.grid : b.icon == 1 ? Icons.sound : b.icon == 2 ? Icons.gear : Icons.power;
+                            colorize: f ? #0a0d18 : Theme.text;
+                            width: (30px * S.k); height: self.width;
+                        }
+                        ta-i := TouchArea { mouse-cursor: pointer; clicked => { root.click(j + 4); } }
+                    }
+                }
+                Text { text: b.label; font-size: (16px * S.k); color: f ? Theme.text : Theme.text2; horizontal-alignment: center; }
+                // Sound: its level under it.
+                if b.icon == 1: Rectangle {
+                    height: (4px * S.k);
+                    border-radius: (2px * S.k);
+                    background: #ffffff1f;
+                    Rectangle { x: 0; width: parent.width * clamp(root.volume-level, 0, 1); border-radius: parent.border-radius; background: Theme.accent.brighter(0.2); }
+                }
+            }
+        }
+        HorizontalLayout {
+            x: parent.width - self.width - (96px * S.k); y: (284px * S.k);
+            width: self.preferred-width; height: (40px * S.k);
+            spacing: (24px * S.k);
+            if root.pad-battery != "": HorizontalLayout {
+                spacing: (8px * S.k);
+                Image { source: Icons.gamepad; colorize: Theme.text2; width: (24px * S.k); height: self.width; y: (8px * S.k); }
+                Text { text: root.pad-battery; font-size: (18px * S.k); color: Theme.text2; vertical-alignment: center; }
+            }
+            Text { text: root.clock; font-size: (26px * S.k); font-weight: 600; color: Theme.text; vertical-alignment: center; }
+        }
+        // What the buttons do.
+        Text {
+            x: parent.width - self.width - (96px * S.k); y: parent.height - (44px * S.k);
+            text: root.pad-hints ? "✕ Select   ○ Back to game   ◂ ▸ Volume on Sound   PS Back to game" : "Enter Select   Esc Back to game   ← → Volume on Sound";
+            font-size: (15px * S.k); color: Theme.hint;
+        }
+    }
+
+    // ---- A notification, top right (the game keeps its input: see src/overlay_ui.rs).
+    toast-card := Rectangle {
+        property <color> tone: root.toast.kind == 1 ? Theme.ok : root.toast.kind == 2 ? Theme.warn : root.toast.kind == 3 ? Theme.danger : Theme.accent;
+        width: min((480px * S.k), root.width - (64px * S.k));
+        height: (84px * S.k);
+        x: root.width - self.width - (root.toast-shown ? (64px * S.k) : (16px * S.k));
+        y: (48px * S.k);
+        opacity: root.toast-shown ? 1 : 0;
+        animate x { duration: 420ms; easing: ease-out-expo; }
+        animate opacity { duration: 240ms; easing: ease-out-quad; }
+        border-radius: (18px * S.k);
+        background: #1a1e2bf5;
+        border-width: 1px;
+        border-color: #ffffff1f;
+        drop-shadow-blur: (32px * S.k);
+        drop-shadow-color: #00000099;
+        HorizontalLayout {
+            padding-left: (18px * S.k); padding-right: (22px * S.k);
+            spacing: (16px * S.k);
+            Rectangle {
+                width: (48px * S.k); height: self.width; y: (18px * S.k);
+                border-radius: self.width / 2;
+                background: toast-card.tone.with-alpha(0.22);
+                Image { source: Icons.get(root.toast.icon); colorize: toast-card.tone; width: (24px * S.k); height: self.width; }
+            }
+            VerticalLayout {
+                alignment: center; spacing: (3px * S.k);
+                Text { text: root.toast.title; font-size: (20px * S.k); font-weight: 600; color: Theme.text; overflow: elide; }
+                if root.toast.sub != "": Text { text: root.toast.sub; font-size: (16px * S.k); color: Theme.text2; overflow: elide; }
+            }
+        }
+    }
+}

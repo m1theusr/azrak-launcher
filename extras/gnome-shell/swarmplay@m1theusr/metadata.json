@@ -1,0 +1,8 @@
+{
+  "uuid": "swarmplay@m1theusr",
+  "name": "SwarmPlay helper",
+  "description": "Lets SwarmPlay show its in-game overlay above a running game, give focus back to the game, and take screenshots. Installed and used by SwarmPlay.",
+  "shell-version": ["46", "47", "48", "49", "50", "51"],
+  "url": "https://github.com/m1theusr/azrak-launcher",
+  "version": 1
+}

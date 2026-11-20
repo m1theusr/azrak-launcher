@@ -409,6 +409,17 @@ pub struct App {
     pub sound: crate::sound::State,
     pub sound_polling: bool,
     pub sound_polled: f64,
+    /// The in-game overlay (src/overlay_ui.rs): its window, whether the panel is up, the item
+    /// chosen, "Close game" pressed once, the game it's over, paused or not, whether it can show
+    /// here, and the last screenshot's name.
+    pub ov: Option<crate::OverlayWindow>,
+    pub ov_open: bool,
+    pub ov_idx: i32,
+    pub ov_confirm: bool,
+    pub ov_game: Option<u32>,
+    pub ov_paused: Option<u32>,
+    pub ov_helper: crate::overlay::Helper,
+    pub last_capture: Option<String>,
     pub power: crate::os::power::PowerAsk,
     /// This PC's processor, memory and graphics (read in the background at start).
     pub pc: Option<crate::pc::Reading>,
@@ -722,6 +733,14 @@ pub fn run(ui: AppWindow, monitors: Vec<Monitor>, target_monitor: Option<Monitor
         sound: Default::default(),
         sound_polling: false,
         sound_polled: 0.0,
+        ov: None,
+        ov_open: false,
+        ov_idx: 0,
+        ov_confirm: false,
+        ov_game: None,
+        ov_paused: None,
+        ov_helper: crate::overlay::Helper::Unsupported,
+        last_capture: None,
         power: Default::default(),
         pc: None,
         pc_checking: false,
@@ -772,7 +791,12 @@ pub fn run(ui: AppWindow, monitors: Vec<Monitor>, target_monitor: Option<Monitor
     });
 
     wire_callbacks(&ui);
-    with_app(|app| app.apply_theme());
+    with_app(|app| { app.apply_theme(); app.ov_check_helper(); });
+    crate::ipc::listen(|command| post(move |app| match { crate::log!("command: {command}"); command.as_str() } {
+        "overlay" => app.ov_ps(),
+        "home" => app.ov_home(),
+        _ => app.ov_capture(),
+    }));
     crate::gamepad::spawn(|p| post(move |app| app.on_pad(p)));
 
     // Clock + session timers: one cheap tick per second (only changed text is pushed).
@@ -1921,6 +1945,8 @@ impl App {
         }
         self.battery_tick();
         self.welcome_tick();
+        // The panel over the game: its clock, play time and downloads as they go.
+        if self.ov_open { self.ov_push(); }
         let running = match self.live.first() {
             Some(s) => crate::RunningData { active: true, name: s.name.clone().into(), time: util::fmt_clock(util::now_secs() - s.since).into(), note: if util::now_secs() - self.running_note.1 < 8.0 { self.running_note.0.clone().into() } else { Default::default() } },
             None => { self.running_note.0.clear(); crate::RunningData::default() }
@@ -1936,18 +1962,21 @@ impl App {
     }
 
     pub fn on_pad(&mut self, p: Pad) {
-        if p == Pad::Ps {
-            // Guide opens the Control Center: over the launcher, or, from a game, bringing the
-            // launcher up first ("Back to game" returns to it).
-            if self.sessions.game_in_front() {
-                crate::sessions::show_launcher();
-                if self.overlay == Overlay::ControlCenter { return; }
-            } else if !crate::display::window_has_focus(&self.ui()) {
-                // Another app is in front: bring the launcher up, as Guide always did.
-                crate::sessions::show_launcher();
-            }
-            self.toggle_control_center();
-            return;
+        // PS: in a game, the overlay over it (src/overlay_ui.rs); else the Control Center. Held:
+        // Home. Share: a screenshot of the game.
+        match p {
+            Pad::Ps => return self.ov_ps(),
+            Pad::PsHold => return self.ov_home(),
+            Pad::Share if self.ov_open || self.in_game() => return self.ov_capture(),
+            _ => {}
+        }
+        // The panel over the game has the controller.
+        if self.ov_open {
+            let a = match p {
+                Pad::Up => Act::Up, Pad::Down => Act::Down, Pad::Left => Act::Left, Pad::Right => Act::Right,
+                Pad::Confirm => Act::Confirm, Pad::Back => Act::Back, _ => return,
+            };
+            return self.ov_act(a);
         }
         if !crate::display::window_has_focus(&self.ui()) {
             return;
@@ -1972,7 +2001,7 @@ impl App {
             Pad::R1 => Act::TabNext,
             Pad::L2 => Act::PageUp,
             Pad::R2 => Act::PageDown,
-            Pad::Ps => return,
+            Pad::Ps | Pad::PsHold | Pad::Share => return,
         };
         if self.search_editing || self.edit_index >= 0 {
             // Controller input ends text editing.
@@ -3197,6 +3226,15 @@ impl App {
     /// Back to the running game. If its window can't be found: said on its pill in the top bar
     /// (for a few seconds) and, pressed on the game (`key`), under its buttons too.
     pub fn resume_game(&mut self, key: Option<&str>) {
+        // On Wayland desktops the helper does it (xdotool can't).
+        if matches!(crate::overlay::desktop(), crate::overlay::Desktop::Gnome | crate::overlay::Desktop::Kde) && self.ov_helper == crate::overlay::Helper::Ready {
+            if let Some(pid) = self.live.first().map(|s| s.pid) {
+                std::thread::spawn(move || { crate::overlay::focus_game(pid); });
+                audio::play(Sound::Select);
+                self.running_note.0.clear();
+                return;
+            }
+        }
         if self.sessions.resume() {
             audio::play(Sound::Select);
             self.running_note.0.clear();
@@ -3530,6 +3568,7 @@ impl App {
         // The volume as it is now (it can change from elsewhere).
         self.sound_polled = 0.0;
         self.sound_poll();
+        self.ov_check_helper();
         self.settings_direct = false;
         self.build_settings();
         // No glass from the last time it was open (other art) until this art's is ready.

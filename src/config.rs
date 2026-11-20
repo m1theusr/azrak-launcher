@@ -48,6 +48,10 @@ pub struct Config {
     pub theme_accent: String,
     /// Settings → Storage's other places (folders on other drives); see src/storage.rs.
     pub storage: Vec<String>,
+    /// The in-game overlay (src/overlay_ui.rs): notifications over games, and pausing the game
+    /// while the panel is up.
+    pub overlay_toasts: bool,
+    pub overlay_pause: bool,
 }
 
 impl Default for Config {
@@ -80,6 +84,8 @@ impl Default for Config {
             theme_image: String::new(),
             theme_accent: "Blue".into(),
             storage: Vec::new(),
+            overlay_toasts: true,
+            overlay_pause: false,
         }
     }
 }

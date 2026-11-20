@@ -21,7 +21,26 @@ pub enum Pad {
     L2,
     R2,
     Options,
+    /// The PS / Guide button, let go before `HOLD`: the Control Center (or, in a game, the overlay).
     Ps,
+    /// The PS / Guide button held for `HOLD`: Home.
+    PsHold,
+    /// Share / Create (Select on other pads): a screenshot.
+    Share,
+}
+
+/// How long the PS button is held to mean Home rather than the Control Center, as on a console.
+const HOLD: Duration = Duration::from_millis(600);
+
+/// While true, every controller is read by the launcher alone (EVIOCGRAB): the in-game overlay
+/// is open and the game must not move under it. Games that read the pad through hidraw still see
+/// it (src/overlay.rs says when to pause them instead).
+pub static GRAB: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+fn set_grab(fd: RawFd, on: bool) {
+    // EVIOCGRAB = _IOW('E', 0x90, int)
+    let req = (1u64 << 30) | (4u64 << 16) | ((b'E' as u64) << 8) | 0x90;
+    unsafe { libc::ioctl(fd, req as _, if on { 1 } else { 0 } as libc::c_int) };
 }
 
 const EV_KEY: u16 = 1;
@@ -39,6 +58,7 @@ fn map_button(code: u16) -> Option<Pad> {
         0x137 => Pad::R1,
         0x138 => Pad::L2,
         0x139 => Pad::R2,
+        0x13a => Pad::Share,
         0x13b => Pad::Options,
         0x13c => Pad::Ps,
         0x220 => Pad::Up,
@@ -74,6 +94,7 @@ struct Device {
     ranges: HashMap<u16, (i32, i32)>,
     axes: HashMap<u16, f32>,
     buttons: [bool; 4], // dpad buttons up/down/left/right
+    grabbed: bool,
 }
 
 /// evdev nodes of gamepads (devices with a joystick handler and a south face button).
@@ -159,11 +180,14 @@ fn open_device(path: &str) -> Option<Device> {
         }
     }
     crate::log!("controller connected: {path}");
-    Some(Device { fd, path: path.to_string(), ranges, axes: HashMap::new(), buttons: [false; 4] })
+    Some(Device { fd, path: path.to_string(), ranges, axes: HashMap::new(), buttons: [false; 4], grabbed: false })
 }
 
 /// Spawns the input thread. `emit` receives presses (directions auto-repeat while held).
 pub fn spawn(emit: impl Fn(Pad) + Send + 'static) {
+    // Screenshot runs and tests: never the real controller (they'd read it, and the overlay would
+    // grab it away from a game being played).
+    if std::env::var_os("SWARMPLAY_NO_PAD").is_some() { return; }
     std::thread::Builder::new()
         .name("gamepad".into())
         .spawn(move || run(emit))
@@ -175,7 +199,16 @@ fn run(emit: impl Fn(Pad)) {
     let mut last_scan = Instant::now() - Duration::from_secs(60);
     let mut held: HashMap<Pad, Instant> = HashMap::new(); // direction -> next repeat time
     let mut buf = [0u8; 24 * 64];
+    // The PS button: when it went down, and whether holding it already meant Home.
+    let mut ps_down: Option<Instant> = None;
+    let mut ps_held = false;
     loop {
+        // The overlay opened or closed: grab or let go of every controller.
+        let grab = GRAB.load(std::sync::atomic::Ordering::Relaxed);
+        for d in devices.iter_mut().filter(|d| d.grabbed != grab) {
+            set_grab(d.fd, grab);
+            d.grabbed = grab;
+        }
         if last_scan.elapsed() > Duration::from_secs(3) {
             last_scan = Instant::now();
             for p in gamepad_paths() {
@@ -192,7 +225,9 @@ fn run(emit: impl Fn(Pad)) {
         }
         // Wait for input, or until the next key-repeat is due.
         let now = Instant::now();
-        let timeout = held.values().map(|t| t.saturating_duration_since(now)).min().unwrap_or(Duration::from_millis(3000));
+        let timeout = held.values().map(|t| t.saturating_duration_since(now)).min().unwrap_or(Duration::from_millis(3000))
+            // Soon enough to notice a PS button held, and the overlay asking for the controller.
+            .min(Duration::from_millis(150));
         let mut fds: Vec<libc::pollfd> = devices.iter().map(|d| libc::pollfd { fd: d.fd, events: libc::POLLIN, revents: 0 }).collect();
         unsafe { libc::poll(fds.as_mut_ptr(), fds.len() as _, timeout.as_millis().min(3000) as i32) };
 
@@ -222,6 +257,11 @@ fn run(emit: impl Fn(Pad)) {
                         Some(p @ (Pad::Up | Pad::Down | Pad::Left | Pad::Right)) => {
                             dev.buttons[p as usize] = value != 0;
                         }
+                        // PS: a tap is told apart from a hold when it's let go.
+                        Some(Pad::Ps) if value == 1 => { ps_down = Some(Instant::now()); ps_held = false; }
+                        Some(Pad::Ps) if value == 0 => {
+                            if ps_down.take().is_some() && !ps_held { emit(Pad::Ps); }
+                        }
                         Some(p) if value == 1 => emit(p),
                         _ => {}
                     },
@@ -235,6 +275,11 @@ fn run(emit: impl Fn(Pad)) {
                     _ => {}
                 }
             }
+        }
+        // Held long enough: Home, at once (without waiting for it to be let go).
+        if ps_down.is_some_and(|t| t.elapsed() >= HOLD) && !ps_held {
+            ps_held = true;
+            emit(Pad::PsHold);
         }
         for i in gone.into_iter().rev() {
             crate::log!("controller disconnected: {}", devices[i].path);

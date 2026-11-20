@@ -37,6 +37,7 @@ impl App {
         theme.set_accent(rgb(accent));
         // Lighter than the accent, so the halo shows over dark art too.
         theme.set_glow(rgb(accent).brighter(0.45).with_alpha(0.78));
+        self.ov_style();
         let kind = WALLPAPERS.iter().position(|w| *w == cfg.theme_wallpaper).unwrap_or(0);
         let image = (kind == YOUR_IMAGE)
             .then(|| slint::Image::load_from_path(&util::expand_home(&cfg.theme_image)).ok())
