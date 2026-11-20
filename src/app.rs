@@ -607,6 +607,7 @@ pub fn run(ui: AppWindow, monitors: Vec<Monitor>, target_monitor: Option<Monitor
     let cfg = Arc::new(Mutex::new(Config::load()));
     audio::init();
     audio::set_enabled(cfg.lock().unwrap().sounds);
+    audio::set_level(cfg.lock().unwrap().sounds_level);
 
     let library = Arc::new(Mutex::new(library::scan(&cfg.lock().unwrap().game_dir_paths())));
     let art = psn::Store::load();
@@ -2937,7 +2938,7 @@ impl App {
 
     pub fn switch_view(&mut self, v: i32, focus: bool) {
         if self.view != v {
-            audio::play(Sound::Select);
+            audio::play(Sound::Tab);
             // What was just pressed on the other tab isn't news on this one.
             self.brief_note = None;
             self.library_waiting = None;
@@ -3232,7 +3233,7 @@ impl App {
         }
         match self.sessions.launch(&game) {
             Ok(()) => {
-                audio::play(Sound::Start);
+                audio::play(Sound::Launch);
                 self.live = self.sessions.live();
                 self.show_launch_splash(l);
                 self.build_row();

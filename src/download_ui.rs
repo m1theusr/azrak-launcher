@@ -561,7 +561,7 @@ impl App {
 
     pub fn filter_downloads(&mut self, filter: usize) {
         if filter > 3 { return; }
-        if filter != self.dl_filter { audio::play(Sound::Move); }
+        if filter != self.dl_filter { audio::play(Sound::Tab); }
         self.dl_filter = filter;
         self.dl_btn = -1;
         self.push_downloads();

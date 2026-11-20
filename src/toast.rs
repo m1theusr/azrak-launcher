@@ -232,7 +232,7 @@ impl App {
     /// The list of notifications, `focus` (a notification's id) chosen.
     pub fn open_notifications(&mut self, focus: Option<u64>) {
         let i = focus.and_then(|id| self.notes.notes.iter().position(|n| n.id == id)).unwrap_or(0);
-        audio::play(Sound::Select);
+        audio::play(Sound::Open);
         self.popups.clear();
         self.push_overlay(Overlay::Notifications, Z_NOTES, i as i32);
         self.push_note_rows();

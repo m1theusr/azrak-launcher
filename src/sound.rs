@@ -82,9 +82,10 @@ impl App {
             r.value = s.output.and_then(|i| s.outputs.get(i)).map(|o| o.label.clone()).unwrap_or_else(|| "Choose".into()).into();
             rows.push((SId::SoundOut, r));
         }
-        let mut r = row(2, "Interface sounds");
-        r.on = sounds_on;
-        r.hint = "The launcher's clicks and chimes".into();
+        let level = self.cfg.lock().unwrap().sounds_level.clamp(1, 3);
+        let mut r = row(3, "Interface sounds");
+        r.value = crate::audio::LEVELS[if sounds_on { level as usize } else { 0 }].into();
+        r.hint = "The launcher's clicks and chimes · a little quieter over a game".into();
         rows.push((SId::Sounds, r));
         rows
     }
@@ -103,6 +104,24 @@ impl App {
                 let on = dir > 0;
                 set_mute(on).map(|_| self.sound.muted = on)
             }
+            SId::Sounds => {
+                // Off, Low, Medium, High: heard at the new level.
+                let (on, level) = { let c = self.cfg.lock().unwrap(); (c.sounds, c.sounds_level.clamp(1, 3)) };
+                let now = if on { level as i32 } else { 0 };
+                // ◂ ▸ stop at the ends; a press (2) goes round.
+                let next = if dir == 2 { (now + 1) % 4 } else { (now + dir.signum()).clamp(0, 3) } as u8;
+                {
+                    let mut c = self.cfg.lock().unwrap();
+                    c.sounds = next > 0;
+                    if next > 0 { c.sounds_level = next; }
+                    c.save();
+                }
+                crate::audio::set_enabled(next > 0);
+                if next > 0 { crate::audio::set_level(next); }
+                crate::audio::play(crate::audio::Sound::Select);
+                self.refresh_settings();
+                return true;
+            }
             SId::SoundOut if !self.sound.outputs.is_empty() => {
                 let n = self.sound.outputs.len() as i32;
                 let next = self.sound.output.map_or(0, |i| i as i32 + dir).rem_euclid(n) as usize;
@@ -113,8 +132,12 @@ impl App {
         if let Err(e) = result {
             self.note_setting(id, &format!("Didn't change: {e}"), 2);
         }
-        // Heard at the new volume.
-        crate::audio::play(crate::audio::Sound::Move);
+        // Heard at the new volume (Mute: a switch's click).
+        crate::audio::play(match id {
+            SId::SoundMute if dir > 0 => crate::audio::Sound::ToggleOn,
+            SId::SoundMute => crate::audio::Sound::ToggleOff,
+            _ => crate::audio::Sound::Move,
+        });
         self.refresh_settings();
         true
     }

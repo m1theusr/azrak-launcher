@@ -697,8 +697,11 @@ impl App {
         if self.sound_change(id, dir) {
             return;
         }
+        // A switch clicks on or off; a choice ticks.
+        let kind = self.settings_rows.get(i).map_or(0, |r| r.kind);
+        let heard = if kind == 2 { if dir > 0 { Sound::ToggleOn } else { Sound::ToggleOff } } else { Sound::Move };
         if self.notify_change(id, dir) {
-            audio::play(Sound::Move);
+            audio::play(heard);
             return self.refresh_settings();
         }
         if self.theme_change(id, dir) {
@@ -748,7 +751,7 @@ impl App {
                 self.save_cfg(|c| c.seed_after_download = on);
                 self.push_downloads();
             }
-            SId::Fullscreen | SId::Amd | SId::ReturnOnExit | SId::Sounds | SId::AutoUpdate | SId::OverlayPause | SId::WineSdlPads => {
+            SId::Fullscreen | SId::Amd | SId::ReturnOnExit | SId::AutoUpdate | SId::OverlayPause | SId::WineSdlPads => {
                 let on = dir > 0;
                 self.save_cfg(|c| match id {
                     SId::WineSdlPads => c.wine_sdl_pads = on,
@@ -757,19 +760,16 @@ impl App {
                     SId::Amd => c.amd_cpu = on,
                     SId::ReturnOnExit => c.return_on_exit = on,
                     SId::AutoUpdate => (c.app_auto_update, c.kyty_auto_update, c.shad_auto_update) = (on, on, on),
-                    _ => c.sounds = on,
+                    _ => {}
                 });
                 if id == SId::AutoUpdate && on {
                     self.kyty_check(false);
                     self.shad_tick();
                 }
-                if id == SId::Sounds {
-                    audio::set_enabled(on);
-                }
             }
             _ => return,
         }
-        audio::play(Sound::Move);
+        audio::play(heard);
         self.refresh_settings();
     }
 
@@ -808,7 +808,7 @@ impl App {
                 ui.set_edit_text(text.into());
                 ui.set_edit_index(i as i32);
             }
-            SId::Fullscreen | SId::Amd | SId::ReturnOnExit | SId::Sounds | SId::AutoUpdate | SId::SeedCompleted | SId::VpnOnly | SId::SoundMute
+            SId::Fullscreen | SId::Amd | SId::ReturnOnExit | SId::AutoUpdate | SId::SeedCompleted | SId::VpnOnly | SId::SoundMute
                 | SId::OverlayPause | SId::WineSdlPads => {
                 let on = self.settings_rows[i].on;
                 self.settings_change(i, if on { -1 } else { 1 });
@@ -816,6 +816,8 @@ impl App {
             SId::Resolution | SId::Present | SId::Display | SId::ThemeWallpaper | SId::ThemeAccent | SId::SoundOut => self.settings_change(i, 1),
             // A press turns it up a step (◂ ▸ go both ways).
             SId::SoundVolume => self.settings_change(i, 1),
+            // A press goes round Off, Low, Medium, High.
+            SId::Sounds => self.settings_change(i, 2),
             SId::KytyUpdate => {
                 audio::play(Sound::Select);
                 if self.kyty.busy || self.kyty.checking {
