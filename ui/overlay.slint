@@ -21,6 +21,8 @@ export component OverlayWindow inherits Window {
     in property <string> game-time;
     // "Close game" was pressed once: pressing it again closes it.
     in property <bool> confirm-close;
+    // Sound was pressed: ◂ ▸ change the volume until ✕ or ○.
+    in property <bool> vol-edit;
     in property <string> dl-title;
     in property <string> dl-sub;
     in property <float> dl-progress: -1;
@@ -141,7 +143,7 @@ export component OverlayWindow inherits Window {
             alignment: start;
             for b[j] in [
                 { label: "Home", icon: 0 },
-                { label: root.volume, icon: 1 },
+                { label: root.vol-edit ? "◂ " + root.volume + " ▸" : root.volume, icon: 1 },
                 { label: "Settings", icon: 2 },
                 { label: "Power", icon: 3 },
             ]: VerticalLayout {
@@ -167,11 +169,13 @@ export component OverlayWindow inherits Window {
                 }
                 Text { text: b.label; font-size: (16px * S.k); color: f ? Theme.text : Theme.text2; horizontal-alignment: center; }
                 // Sound: its level under it.
+                // (Thicker while it's being changed.)
                 if b.icon == 1: Rectangle {
-                    height: (4px * S.k);
-                    border-radius: (2px * S.k);
+                    height: root.vol-edit ? (8px * S.k) : (4px * S.k);
+                    border-radius: self.height / 2;
                     background: #ffffff1f;
-                    Rectangle { x: 0; width: parent.width * clamp(root.volume-level, 0, 1); border-radius: parent.border-radius; background: Theme.accent.brighter(0.2); }
+                    animate height { duration: 140ms; }
+                    Rectangle { x: 0; width: parent.width * clamp(root.volume-level, 0, 1); border-radius: parent.border-radius; background: Theme.accent.brighter(0.2); animate width { duration: 120ms; } }
                 }
             }
         }
@@ -189,7 +193,9 @@ export component OverlayWindow inherits Window {
         // What the buttons do.
         Text {
             x: parent.width - self.width - (96px * S.k); y: parent.height - (44px * S.k);
-            text: root.pad-hints ? "✕ Select   ○ Back to game   ◂ ▸ Volume on Sound   PS Back to game" : "Enter Select   Esc Back to game   ← → Volume on Sound";
+            text: root.vol-edit
+                ? (root.pad-hints ? "◂ ▸ Volume   ✕ Done   ○ Done" : "← → Volume   Enter Done   Esc Done")
+                : (root.pad-hints ? "✕ Select   ○ Back to game   PS Back to game" : "Enter Select   Esc Back to game");
             font-size: (15px * S.k); color: Theme.hint;
         }
     }

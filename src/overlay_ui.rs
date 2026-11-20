@@ -61,15 +61,18 @@ impl App {
         w.global::<crate::Theme>().set_glow(t.get_glow());
     }
 
-    /// PS tapped (or `swarmplay --overlay`): the panel over the game, or away again.
-    pub fn ov_ps(&mut self) {
+    /// PS tapped (or `swarmplay --overlay`, `keyboard`): the panel over the game, or away again.
+    /// From the controller the game keeps the focus (the controller reaches SwarmPlay anyway, and
+    /// many full-screen games stop drawing, or minimise, once they lose it); from the keyboard the
+    /// panel takes it, for the keys.
+    pub fn ov_ps(&mut self, keyboard: bool) {
         crate::log!("overlay: PS · open {} · in game {} · {:?} · {:?}", self.ov_open, self.in_game(), overlay::desktop(), self.ov_helper);
         if self.ov_open { return self.ov_close(true); }
         if !self.in_game() { return self.cc_from_pad(); }
         match (overlay::desktop(), self.ov_helper) {
             // Steam's Game Mode: the PS button is Steam's.
             (Desktop::SteamGameMode, _) => {}
-            (_, Helper::Ready) => self.ov_show(),
+            (_, Helper::Ready) => self.ov_show(keyboard),
             // No way above the game here: the launcher comes up, its Control Center open.
             (_, h) => {
                 if matches!(h, Helper::Missing | Helper::NeedsLogin) {
@@ -101,12 +104,13 @@ impl App {
         audio::play(Sound::Select);
     }
 
-    fn ov_show(&mut self) {
+    fn ov_show(&mut self, focus: bool) {
         let w = self.ov_window();
         self.ov_style();
         self.ov_open = true;
         self.ov_idx = 0;
         self.ov_confirm = false;
+        self.ov_vol_edit = false;
         self.ov_game = self.live.first().map(|s| s.pid);
         self.ov_push();
         w.set_open(false);
@@ -125,11 +129,11 @@ impl App {
             if let Some(pid) = self.ov_game { unsafe { libc::killpg(pid as i32, libc::SIGSTOP) }; self.ov_paused = Some(pid); }
         }
         audio::play(Sound::Select);
-        std::thread::spawn(|| {
+        std::thread::spawn(move || {
             // Mapped first: the desktop finds it by its title.
             std::thread::sleep(Duration::from_millis(60));
-            let raised = overlay::raise_overlay(true);
-            crate::log!("overlay: shown · above the game: {raised}");
+            let raised = overlay::raise_overlay(focus);
+            crate::log!("overlay: shown · above the game: {raised} · focus: {focus}");
         });
     }
 
@@ -176,6 +180,7 @@ impl App {
         w.set_game_time(game.map(|s| crate::util::fmt_duration_words(crate::util::now_secs() - s.since)).unwrap_or_default().into());
         w.set_idx(self.ov_idx);
         w.set_confirm_close(self.ov_confirm);
+        w.set_vol_edit(self.ov_vol_edit);
         w.set_pad_hints(self.pad_hints);
         w.set_clock(self.clock.clone().into());
         let jobs = self.downloads.snapshot();
@@ -203,9 +208,13 @@ impl App {
     /// The controller (or the keyboard) while the panel is up.
     pub fn ov_act(&mut self, a: Act) {
         let i = self.ov_idx.clamp(0, ITEMS as i32 - 1) as usize;
-        // Sound: ◂ ▸ turn it down and up, right there.
-        if i == 5 && matches!(a, Act::Left | Act::Right) {
-            self.sound_change(crate::settings::SId::SoundVolume, if a == Act::Left { -1 } else { 1 });
+        // Sound, after ✕: ◂ ▸ turn the volume down and up; ✕, ○ (or moving up) are done with it.
+        if self.ov_vol_edit {
+            match a {
+                Act::Left | Act::Right => { self.sound_change(crate::settings::SId::SoundVolume, if a == Act::Left { -1 } else { 1 }); }
+                Act::Confirm | Act::Back | Act::Up | Act::Down => { self.ov_vol_edit = false; audio::play(Sound::Back); }
+                _ => {}
+            }
             return self.ov_push();
         }
         if let Some(to) = crate::control_center::step(ITEMS, TOP, i, a) {
@@ -245,7 +254,7 @@ impl App {
             2 => { self.ov_home(); let key = self.ring_key.clone(); self.open_downloads(key.as_deref()); }
             3 => self.ov_capture(),
             4 => self.ov_home(),
-            5 => { let on = !self.sound.muted; self.sound_change(crate::settings::SId::SoundMute, if on { 1 } else { -1 }); self.ov_push(); }
+            5 => { self.ov_vol_edit = true; audio::play(Sound::Select); self.ov_push(); }
             6 => { self.ov_home(); self.open_settings(); }
             _ => { self.ov_home(); self.open_power_menu(); }
         }
@@ -326,7 +335,7 @@ impl App {
         (r.value, r.value_kind) = match self.ov_helper {
             Helper::Ready => ("Ready".into(), 1),
             Helper::Missing => ("Install the GNOME helper".into(), 3),
-            Helper::NeedsLogin => ("Log out and in to finish".into(), 2),
+            Helper::NeedsLogin => ("Log out and in to finish".into(), 3),
             Helper::Steam => ("Steam's overlay is used".into(), 0),
             Helper::Unsupported => (format!("Not on {}", desk.label()).into(), 0),
         };
