@@ -45,6 +45,13 @@ pub enum SId {
     AutoUpdate,
     KytyRollback,
     ShadRollback,
+    // Storage (src/storage.rs)
+    StoragePlace(u16),
+    StorageAdd,
+    // Sound (src/sound.rs)
+    SoundVolume,
+    SoundMute,
+    SoundOut,
     // Theme (src/theme.rs)
     ThemeWallpaper,
     ThemeImage,
@@ -98,15 +105,10 @@ impl App {
         r.value = cfg.game_dirs.iter().map(|d| util::display_path(d)).collect::<Vec<_>>().join("; ").into();
         r.hint = format!("{} found · more than one folder? Put a ; between them", plural(self.locals.len(), "installed game")).into();
         rows.push((SId::Dirs, r));
-        let mut r = row(1, "Install new games to");
-        r.value = util::display_path(&cfg.install_dir).into();
-        r.hint = "Downloaded games are set up here when you press Install".into();
-        rows.push((SId::InstallDir, r));
-        let mut r = row(1, "Save downloads to");
-        r.value = util::display_path(&cfg.download_dir).into();
-        r.hint = "Each download gets its own folder".into();
-        rows.push((SId::DownloadDir, r));
         rows.push((SId::Rescan, row(4, "Rescan game folders")));
+
+        header(&mut rows, "STORAGE");
+        rows.extend(self.storage_rows().0);
 
         header(&mut rows, "PLAYING");
         let mut r = row(2, "Play games in fullscreen");
@@ -122,6 +124,9 @@ impl App {
         r.hint = if connected { "Your controller works in games with no setup" } else { "Games play best with a controller · open to see the keyboard keys" }.into();
         rows.push((SId::Controls, r));
         rows.push((SId::ThisPc, self.this_pc_row()));
+
+        header(&mut rows, "SOUND");
+        rows.extend(self.sound_rows(cfg.sounds));
 
         header(&mut rows, "DOWNLOADS");
         // VPN: the toggle keeps downloads off every other connection; the row below manages the
@@ -283,9 +288,6 @@ impl App {
         }
         .into();
         rows.push((SId::Display, r));
-        let mut r = row(2, "Interface sounds");
-        r.on = cfg.sounds;
-        rows.push((SId::Sounds, r));
         let unshared = self.my_results.unshared().len();
         let mut r = row(4, "Share your game ratings");
         (r.value, r.value_kind) = if unshared > 0 { (format!("{unshared} to share").into(), 3) } else { ("Nothing new".into(), 0) };
@@ -396,7 +398,7 @@ impl App {
         let mut chars = header.chars();
         let label: String = chars.next().into_iter().chain(chars.flat_map(|c| c.to_lowercase())).collect();
         let (sub, (note, note_kind)) = match header {
-            "SYSTEM" => ("Internet, Bluetooth, sound and updates", (String::new(), 0)),
+            "SYSTEM" => ("Internet, Bluetooth and updates", (String::new(), 0)),
             "GAMES" => ("Where your games live", (String::new(), 0)),
             "PLAYING" => ("What happens when you start a game", match crate::gamepad::connected().first() {
                 Some(name) => (name.clone(), 0),
@@ -413,14 +415,19 @@ impl App {
                 else if ready > 0 { (format!("{ready} ready"), 2) } else { (String::new(), 0) }
             }),
             "THEME" => ("Wallpaper and accent colour", (String::new(), 0)),
-            "LAUNCHER" => ("Display, sounds and your game ratings", (String::new(), 0)),
+            "STORAGE" => ("Where games download and install, and the room left", match self.storage_places().into_iter().find(|p| p.default) {
+                Some(p) if p.total > 0 => (format!("{:.0} GB free", p.free as f64 / (1u64 << 30) as f64), if p.free < 50 << 30 { 2 } else { 0 }),
+                _ => (String::new(), 0),
+            }),
+            "SOUND" => ("Volume and where sound goes", if self.sound.muted { ("Muted".to_string(), 2) } else { (self.sound.volume.map(|v| format!("{v}%")).unwrap_or_default(), 0) }),
+            "LAUNCHER" => ("Display and your game ratings", (String::new(), 0)),
             "ADVANCED" => ("KytyPS5 location and video options, the game catalog", (String::new(), 0)),
             _ => ("", (String::new(), 0)),
         };
         let sub = if header == "ABOUT" { format!("SwarmPlay {}", crate::update::current_version()) } else { sub.to_string() };
         // Its icon on the first page (ui/theme.slint Icons.get).
         let icon = match header {
-            "SYSTEM" => "wifi", "GAMES" => "grid", "PLAYING" => "gamepad", "DOWNLOADS" => "disk",
+            "SYSTEM" => "wifi", "GAMES" => "grid", "PLAYING" => "gamepad", "STORAGE" => "disk", "SOUND" => "sound", "DOWNLOADS" => "download",
             "UPDATES" => "retry", "THEME" => "palette", "LAUNCHER" => "gear", "ADVANCED" => "log", _ => "info",
         };
         SettingSection { label: label.into(), sub: sub.into(), note: note.into(), note_kind, icon: icon.into() }
@@ -656,6 +663,9 @@ impl App {
         if self.system_change(id, dir) {
             return;
         }
+        if self.sound_change(id, dir) {
+            return;
+        }
         if self.theme_change(id, dir) {
             audio::play(Sound::Move);
             return self.refresh_settings();
@@ -734,9 +744,12 @@ impl App {
             return;
         }
         match id {
-            SId::Emulator | SId::Dirs | SId::Extra | SId::DownloadDir | SId::InstallDir | SId::ThemeImage => {
+            SId::StoragePlace(n) => self.storage_use(n as usize),
+            SId::Emulator | SId::Dirs | SId::Extra | SId::DownloadDir | SId::InstallDir | SId::ThemeImage | SId::StorageAdd => {
                 let cfg = self.cfg.lock().unwrap().clone();
                 let text = match id {
+                    // Where other drives show up, to finish typing.
+                    SId::StorageAdd => std::env::var("USER").ok().map(|u| format!("/run/media/{u}/")).filter(|p| std::path::Path::new(p).is_dir()).unwrap_or_else(|| "~/".into()),
                     SId::ThemeImage if cfg.theme_image.is_empty() => "~/Pictures/".into(),
                     SId::ThemeImage => cfg.theme_image,
                     SId::Emulator => cfg.emulator,
@@ -752,11 +765,13 @@ impl App {
                 ui.set_edit_text(text.into());
                 ui.set_edit_index(i as i32);
             }
-            SId::Fullscreen | SId::Amd | SId::ReturnOnExit | SId::Sounds | SId::AutoUpdate | SId::SeedCompleted | SId::VpnOnly => {
+            SId::Fullscreen | SId::Amd | SId::ReturnOnExit | SId::Sounds | SId::AutoUpdate | SId::SeedCompleted | SId::VpnOnly | SId::SoundMute => {
                 let on = self.settings_rows[i].on;
                 self.settings_change(i, if on { -1 } else { 1 });
             }
-            SId::Resolution | SId::Present | SId::Display | SId::ThemeWallpaper | SId::ThemeAccent => self.settings_change(i, 1),
+            SId::Resolution | SId::Present | SId::Display | SId::ThemeWallpaper | SId::ThemeAccent | SId::SoundOut => self.settings_change(i, 1),
+            // A press turns it up a step (◂ ▸ go both ways).
+            SId::SoundVolume => self.settings_change(i, 1),
             SId::KytyUpdate => {
                 audio::play(Sound::Select);
                 if self.kyty.busy || self.kyty.checking {
@@ -869,6 +884,8 @@ impl App {
                 self.note_setting(SId::Dirs, &format!("{} found", plural(n, "installed game")), 1);
             }
             SId::Extra => self.save_cfg(|c| c.extra_args = t),
+            SId::StorageAdd if t == "~/" || t.ends_with("/run/media/") || t.split('/').count() <= 4 && t.starts_with("/run/media/") && t.ends_with('/') => {}
+            SId::StorageAdd => self.storage_add(&t),
             // Left as it opened: nothing chosen.
             SId::ThemeImage if t == "~/Pictures/" => {}
             SId::ThemeImage => self.theme_image_typed(&t),

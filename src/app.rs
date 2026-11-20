@@ -405,6 +405,10 @@ pub struct App {
     pub welcome_read: f64,
     /// The notification on screen (src/toast.rs): a newer one replaces it.
     pub toast_seq: u64,
+    /// Settings → Sound's volume, mute and outputs, as last read (src/sound.rs).
+    pub sound: crate::sound::State,
+    pub sound_polling: bool,
+    pub sound_polled: f64,
     pub power: crate::os::power::PowerAsk,
     /// This PC's processor, memory and graphics (read in the background at start).
     pub pc: Option<crate::pc::Reading>,
@@ -715,6 +719,9 @@ pub fn run(ui: AppWindow, monitors: Vec<Monitor>, target_monitor: Option<Monitor
         battery_read: 0.0,
         welcome_read: 0.0,
         toast_seq: 0,
+        sound: Default::default(),
+        sound_polling: false,
+        sound_polled: 0.0,
         power: Default::default(),
         pc: None,
         pc_checking: false,
@@ -1901,6 +1908,7 @@ impl App {
         if self.overlay == Overlay::Settings { self.refresh_settings_notes(); }
         if self.overlay == Overlay::Settings {
             self.sys_poll();
+            self.sound_poll();
         }
         let tm = util::local_time();
         let (h, m) = (tm.tm_hour, tm.tm_min);
@@ -3005,7 +3013,7 @@ impl App {
                 else if job.is_some() { ("download", "View download") }
                 else if discouraged { ("download", "Download anyway") }
                 else { ("download", "Download") };
-            a.push(mk(id, label, "disk", a.is_empty() && !discouraged));
+            a.push(mk(id, label, "download", a.is_empty() && !discouraged));
         }
         let discouraged = a.iter().any(|x| x.label == "Download anyway");
         if crate::trailer::available() && info.as_ref().is_some_and(|i| !i.video.is_empty()) {
@@ -3519,6 +3527,9 @@ impl App {
         // The first section, with the sections in focus.
         self.settings_section = 0;
         self.set_settings_root(true);
+        // The volume as it is now (it can change from elsewhere).
+        self.sound_polled = 0.0;
+        self.sound_poll();
         self.settings_direct = false;
         self.build_settings();
         // No glass from the last time it was open (other art) until this art's is ready.

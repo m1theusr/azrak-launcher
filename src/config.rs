@@ -46,6 +46,8 @@ pub struct Config {
     pub theme_wallpaper: String,
     pub theme_image: String,
     pub theme_accent: String,
+    /// Settings → Storage's other places (folders on other drives); see src/storage.rs.
+    pub storage: Vec<String>,
 }
 
 impl Default for Config {
@@ -77,6 +79,7 @@ impl Default for Config {
             theme_wallpaper: "Game art".into(),
             theme_image: String::new(),
             theme_accent: "Blue".into(),
+            storage: Vec::new(),
         }
     }
 }

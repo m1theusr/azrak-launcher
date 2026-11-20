@@ -70,6 +70,8 @@ export global Icons {
     out property <image> gamepad: @image-url("../assets/icons/gamepad.svg");
     out property <image> sparkle: @image-url("../assets/icons/sparkle.svg");
     out property <image> palette: @image-url("../assets/icons/palette.svg");
+    out property <image> sound: @image-url("../assets/icons/sound.svg");
+    out property <image> download: @image-url("../assets/icons/download.svg");
     out property <image> spinner: @image-url("../assets/icons/spinner.svg");
     out property <image> wifi: @image-url("../assets/icons/wifi.svg");
     out property <image> lock: @image-url("../assets/icons/lock.svg");
@@ -96,7 +98,7 @@ export global Icons {
             : name == "lock" ? lock : name == "shift" ? shift : name == "eye" ? eye : name == "eye-off" ? eye-off
             : name == "pause" ? pause : name == "close" ? close : name == "trash" ? trash : name == "retry" ? retry
             : name == "unshare" ? unshare : name == "share" ? share : name == "more" ? more
-            : name == "alert" ? alert : name == "gamepad" ? gamepad : name == "sparkle" ? sparkle : name == "palette" ? palette : name == "wifi" ? wifi : none;
+            : name == "alert" ? alert : name == "gamepad" ? gamepad : name == "sparkle" ? sparkle : name == "palette" ? palette : name == "sound" ? sound : name == "download" ? download : name == "wifi" ? wifi : none;
     }
 }
 
@@ -295,6 +297,8 @@ export struct SettingData {
     signal: int,      // a Wi-Fi network's bars, 1–4, after the value (0: none)
     lock: bool,       // a Wi-Fi network that needs a password
     busy: bool,       // in progress (connecting, searching): a spinner before the value
+    has-bar: bool,    // a level (Volume): a bar before the value, filled to `bar` (0–1)
+    bar: float,
 }
 
 // kind 0 info, 1 ok, 2 error. image: a picture for the icon tile (app or game icon), if any.

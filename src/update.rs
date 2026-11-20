@@ -170,6 +170,8 @@ pub struct AppUpdate {
     /// Installed on disk, waiting for a restart.
     pub installed: Option<String>,
     pub last_check: f64,
+    /// The version a notification already told about (once per version).
+    pub told: String,
 }
 
 fn post(f: impl FnOnce(&mut App) + Send + 'static) {
@@ -215,6 +217,13 @@ impl App {
                 match res {
                     Ok(rel) => {
                         app.upd.latest = Some(rel.clone());
+                        // Said once, wherever you are: a new SwarmPlay is out.
+                        if app.app_update_available() && app.upd.told != rel.version {
+                            app.upd.told = rel.version.clone();
+                            let auto = app.cfg.lock().unwrap().app_auto_update;
+                            let sub = if auto { "Downloading it now" } else { "Settings → Updates to get it" };
+                            app.toast(&format!("SwarmPlay {} is out", rel.version), sub, "download", crate::toast::INFO);
+                        }
                         // Otherwise Settings says it: "Update to …" on the row and "1 ready"
                         // beside Updates, or "Up to date".
                         if app.app_update_available() && (manual || app.cfg.lock().unwrap().app_auto_update) {
@@ -273,6 +282,7 @@ impl App {
                 match res {
                     Ok(()) => {
                         app.upd.installed = Some(rel.version.clone());
+                        app.toast(&format!("SwarmPlay {} is ready", rel.version), "Restart SwarmPlay to finish (Control Center → Power)", "check", crate::toast::DONE);
                         crate::log!("launcher update {} installed", rel.version);
                     }
                     Err(e) => {
