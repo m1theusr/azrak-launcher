@@ -416,6 +416,8 @@ pub struct App {
     pub ov_open: bool,
     pub ov_idx: i32,
     pub ov_confirm: bool,
+    /// The overlay's Sound button was pressed: ◂ ▸ change the volume until ✕ or ○.
+    pub ov_vol_edit: bool,
     pub ov_game: Option<u32>,
     pub ov_paused: Option<u32>,
     pub ov_helper: crate::overlay::Helper,
@@ -737,6 +739,7 @@ pub fn run(ui: AppWindow, monitors: Vec<Monitor>, target_monitor: Option<Monitor
         ov_open: false,
         ov_idx: 0,
         ov_confirm: false,
+        ov_vol_edit: false,
         ov_game: None,
         ov_paused: None,
         ov_helper: crate::overlay::Helper::Unsupported,
@@ -793,7 +796,7 @@ pub fn run(ui: AppWindow, monitors: Vec<Monitor>, target_monitor: Option<Monitor
     wire_callbacks(&ui);
     with_app(|app| { app.apply_theme(); app.ov_check_helper(); });
     crate::ipc::listen(|command| post(move |app| match { crate::log!("command: {command}"); command.as_str() } {
-        "overlay" => app.ov_ps(),
+        "overlay" => app.ov_ps(true),
         "home" => app.ov_home(),
         _ => app.ov_capture(),
     }));
@@ -1965,7 +1968,7 @@ impl App {
         // PS: in a game, the overlay over it (src/overlay_ui.rs); else the Control Center. Held:
         // Home. Share: a screenshot of the game.
         match p {
-            Pad::Ps => return self.ov_ps(),
+            Pad::Ps => return self.ov_ps(false),
             Pad::PsHold => return self.ov_home(),
             Pad::Share if self.ov_open || self.in_game() => return self.ov_capture(),
             _ => {}
