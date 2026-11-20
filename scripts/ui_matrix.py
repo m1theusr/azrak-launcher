@@ -42,6 +42,7 @@ STEPS = [
     ("06-library-down", ["Down", "Down", "Down", "sleep:1"]),
     ("07-search", ["slash", "r", "e", "s", "i", "sleep:1"]),
     ("08-menu", ["Escape", "Escape", "sleep:0.5", "Escape", "sleep:0.8", "o", "sleep:0.6"]),
+    ("08b-menu-beside", ["Escape", "Down", "Right", "Return", "sleep:0.6"]),           # from the ··· button: beside it
     ("09-settings", ["Escape", "Escape", "Escape", "sleep:0.5", "s", "sleep:0.8"]),   # the first page: sections
     ("09b-settings-games", ["Return", "sleep:0.6"]),                                 # a section's page
     ("09c-settings-theme", ["Escape", "Down", "Down", "Down", "Down", "Return", "Right", "sleep:0.8"]),  # Wallpaper: Deep blue

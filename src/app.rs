@@ -3402,6 +3402,9 @@ impl App {
         self.menu_target = Some(t);
         self.menu_actions = items;
         audio::play(Sound::Select);
+        // From Home's ··· (or Options there) it rises beside the button.
+        let beside = self.overlay == Overlay::None && self.view == 0 && self.zone == Z_ACTIONS;
+        self.ui().set_menu_anchor(i32::from(beside));
         self.push_overlay(Overlay::Menu, Z_MENU, 0);
         self.push_menu(&title);
     }

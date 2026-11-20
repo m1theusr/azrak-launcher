@@ -5,9 +5,9 @@
 #   scripts/check.sh                  # 1920x1080 screenshots
 #   scripts/check.sh 1280x720 2560x1440
 #
-# It uses the `quick` profile (Cargo.toml): our code builds with light optimisation and
-# incrementally, the libraries fully optimised and once, and the tests share them, so an edit
-# rebuilds in seconds. Linked with mold when it's there. Releases still build with --release.
+# It uses the `quick` profile (Cargo.toml): our code unoptimised and incremental, the libraries
+# fully optimised and built once (shared with the tests), so a UI edit rebuilds in ~25 s. Linked
+# with mold when it's there. Releases still build with --release.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 cargo="${CARGO:-$HOME/.cargo/bin/cargo}"
@@ -18,8 +18,8 @@ fi
 unset WAYLAND_DISPLAY XDG_SESSION_TYPE
 
 start=$(date +%s)
-"$cargo" build --profile quick --locked
-"$cargo" test --profile quick --locked --no-run 2>/dev/null
+# The launcher and its tests in one go: cargo compiles the two side by side.
+"$cargo" build --profile quick --locked --bins --tests
 echo "built in $(( $(date +%s) - start ))s"
 
 log=$(mktemp -d)

@@ -54,11 +54,12 @@ panic = "unwind"
 [profile.dev.package."*"]
 opt-level = 2
 
-# For working on the launcher (scripts/check.sh): our code builds fast and incrementally,
-# the libraries stay fully optimised (built once), and the tests share them.
+# For working on the launcher (scripts/check.sh): our code unoptimised and incremental (the
+# Slint UI's generated code is most of it: optimising it took ~3 min an edit), the libraries
+# fully optimised and built once (image decoding, rendering), shared with the tests.
 [profile.quick]
 inherits = "release"
-opt-level = 1
+opt-level = 0
 lto = false
 codegen-units = 64
 incremental = true
