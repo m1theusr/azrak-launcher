@@ -1,9 +1,11 @@
 [package]
 name = "azrak"
-version = "1.29.0"
+version = "1.29.1"
 edition = "2021"
 description = "SwarmPlay: a fast, native console-style game launcher for Linux (a fork of Azrak Launcher)"
 license = "MIT"
+repository = "https://github.com/swarmplayhq/swarmplay"
+homepage = "https://swarmplayhq.github.io"
 rust-version = "1.92"
 # The program is SwarmPlay; the package keeps upstream's name so merges from Azrak Launcher stay easy.
 autobins = false
