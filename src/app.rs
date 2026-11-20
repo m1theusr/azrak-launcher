@@ -842,9 +842,9 @@ impl App {
     }
 }
 
-/// The top bar's avatar: the first letter of who's signed in (their real name when the system
-/// has one, else the login).
-fn user_initial() -> String {
+/// Who's signed in, for the avatar and the start screen: the first name of their real name when
+/// the system has one, else the login.
+fn user_name() -> String {
     let gecos = std::fs::read_to_string("/etc/passwd").ok().and_then(|passwd| {
         let uid = unsafe { libc::getuid() }.to_string();
         passwd.lines().map(|l| l.split(':').collect::<Vec<_>>())
@@ -852,6 +852,11 @@ fn user_initial() -> String {
             .map(|f| f[4].split(',').next().unwrap_or_default().trim().to_string())
     });
     let name = gecos.filter(|n| !n.is_empty()).or_else(|| std::env::var("USER").ok()).unwrap_or_default();
+    name.split_whitespace().next().unwrap_or_default().to_string()
+}
+
+/// The avatar's letter: the name's first.
+fn user_initial(name: &str) -> String {
     name.chars().find(|c| c.is_alphanumeric()).map(|c| c.to_uppercase().collect()).unwrap_or_else(|| "?".into())
 }
 
@@ -859,7 +864,9 @@ fn wire_callbacks(ui: &AppWindow) {
     ui.on_key(|text, ctrl, alt, repeat| with_app_ret(|app| app.on_key(&text, ctrl, alt, repeat)));
     ui.on_click(|zone, idx| with_app(move |app| app.on_click(zone, idx)));
     ui.set_on_os(crate::os::system::on_os());
-    ui.set_user_initial(user_initial().into());
+    let name = user_name();
+    ui.set_user_initial(user_initial(&name).into());
+    ui.set_user_name(name.into());
     ui.on_hover(|zone, idx| with_app(move |app| app.on_hover(zone, idx)));
     ui.on_row_wheel(|d| {
         with_app(move |app| {

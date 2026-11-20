@@ -349,7 +349,10 @@ impl App {
             audio::play(Sound::Select);
         } else {
             // Keep the splash up for a short, smooth beat even when everything is cached.
-            let min = Duration::from_millis(650);
+            // (Long enough to read "Welcome back"; everything loads meanwhile anyway. The
+            // screenshot run holds it longer, to shoot it.)
+            let hold = std::env::var("SWARMPLAY_BOOT_HOLD_MS").ok().and_then(|ms| ms.parse().ok()).unwrap_or(1300);
+            let min = Duration::from_millis(hold);
             let wait = min.saturating_sub(self.boot.started.map(|s| s.elapsed()).unwrap_or(min));
             slint::Timer::single_shot(wait, || with_app(|app| app.boot_finish()));
         }

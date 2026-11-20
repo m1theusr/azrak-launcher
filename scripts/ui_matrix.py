@@ -27,7 +27,7 @@ SIZES = ["1280x720", "1366x768", "1920x1080", "1920x1200", "2560x1440", "3440x14
 
 # (screen name, keys to press before the shot)
 STEPS = [
-    ("00-notification", []),
+    ("00-boot", []),                                       # the start screen (held: SWARMPLAY_BOOT_HOLD_MS)
     ("01-home", ["sleep:9"]),
     ("01b-welcome", ["Left", "Down", "sleep:0.8"]),         # the Welcome tile's widgets
     ("01c-top-buttons", ["Up", "Up", "Right", "Right", "sleep:0.5"]),  # Search, round, focused
@@ -80,7 +80,7 @@ def shoot(size: str, n: int, out: Path, binary: Path, game: Path | None):
         (stubs / tool).write_text("#!/bin/sh\nexit 0\n")
         (stubs / tool).chmod(0o755)
     env = {**os.environ, "DISPLAY": disp, "HOME": str(home), "PATH": f"{stubs}:{os.environ['PATH']}",
-           "AZRAK_PRETEND_VERSION": "1.3.0"}
+           "AZRAK_PRETEND_VERSION": "1.3.0", "SWARMPLAY_BOOT_HOLD_MS": "6000"}
     for k in ("XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME"):
         env.pop(k, None)
     procs = [subprocess.Popen(["Xvfb", disp, "-screen", "0", f"{w}x{h}x24", "+extension", "GLX", "-noreset"],
