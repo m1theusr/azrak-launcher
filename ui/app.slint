@@ -355,6 +355,8 @@ export component AppWindow inherits Window {
 
     in property <string> menu-title;
     in property <[MenuItem]> menu-items;
+    // Where the Options menu opens: 0 the middle, 1 beside Home's ··· button.
+    in property <int> menu-anchor;
 
     in property <bool> boot-first;
     // Started with "Try AzrakOS" on the USB stick, right after "Welcome to AzrakOS": this screen
@@ -778,7 +780,7 @@ export component AppWindow inherits Window {
                         Rectangle {
                             y: 0;
                             height: root.card-w * 1.5;   // official covers are 2:3
-                            transform-scale: f ? 1.05 : 1.0;
+                            transform-scale: ta-card.pressed ? 0.97 : f ? 1.05 : ta-card.has-hover ? 1.025 : 1.0;
                             animate transform-scale { duration: 220ms; easing: ease-out-back; }
                             FocusRing { w: parent.width; h: parent.height; on: f; radius: (14px * S.k); }
                             Rectangle {
@@ -896,7 +898,12 @@ export component AppWindow inherits Window {
                                 height: (24px * root.library-type-scale);
                                 spacing: (6px * S.k);
                                 alignment: start;
-                                Text { text: "Availability:"; font-size: (16px * root.library-type-scale); color: Theme.text3; overflow: elide; }
+                                Rectangle {
+                                    width: (8px * S.k); height: self.width; y: (parent.height - self.height) / 2;
+                                    border-radius: self.width / 2;
+                                    background: c.availability-kind == 1 ? Theme.ok : c.availability-kind == 2 ? Theme.warn : Theme.text3;
+                                }
+                                Text { text: "Availability"; font-size: (16px * root.library-type-scale); color: Theme.text3; overflow: elide; }
                                 Text {
                                     text: c.availability;
                                     font-size: (16px * root.library-type-scale);
@@ -905,7 +912,7 @@ export component AppWindow inherits Window {
                                 }
                             }
                         }
-                        TouchArea {
+                        ta-card := TouchArea {
                             mouse-cursor: pointer;
                             clicked => { root.click(Zone.grid, c.index); }
                         }
@@ -936,11 +943,10 @@ export component AppWindow inherits Window {
                     library-search := Rectangle {
                         width: min((600px * S.k), max((180px * S.k), parent.width - library-sort.width - density.width - (54px * S.k)));
                         border-radius: (31px * S.k);
-                        background: root.zone == Zone.search ? #232c47 : #ffffff14;
-                        border-width: root.zone == Zone.search ? (3px * S.k) : (1px * S.k);
-                        border-color: root.zone == Zone.search ? #ffffff : Theme.line;
-                        drop-shadow-blur: root.zone == Zone.search ? (18px * S.k) : 0;
-                        drop-shadow-color: #3d8bff66;
+                        background: root.zone == Zone.search ? #ffffff1f : ta-search.has-hover ? #ffffff17 : #ffffff0f;
+                        border-width: root.zone == Zone.search ? (3px * S.k) : 0;
+                        border-color: #f5f7fb;
+                        animate background { duration: 120ms; }
                         Image { x: (24px * S.k); source: Icons.search; colorize: Theme.text2; width: (24px * S.k); height: (24px * S.k); }
                         search-input := TextInput {
                             x: (62px * S.k);
@@ -961,7 +967,7 @@ export component AppWindow inherits Window {
                             color: Theme.text3;
                             vertical-alignment: center;
                         }
-                        TouchArea {
+                        ta-search := TouchArea {
                             mouse-cursor: text;
                             clicked => { root.click(Zone.search, 0); }
                         }
@@ -969,30 +975,30 @@ export component AppWindow inherits Window {
                     library-sort := Rectangle {
                         width: sort-row.preferred-width + (40px * S.k);
                         border-radius: (31px * S.k);
-                        background: root.zone == Zone.sort ? #ffffff26 : #ffffff14;
-                        border-width: root.zone == Zone.sort ? (3px * S.k) : (1px * S.k);
-                        border-color: root.zone == Zone.sort ? #ffffff : Theme.line;
+                        background: root.zone == Zone.sort ? #ffffff1f : ta-sort.has-hover ? #ffffff17 : #ffffff0f;
+                        border-width: root.zone == Zone.sort ? (3px * S.k) : 0;
+                        border-color: #f5f7fb;
                         sort-row := HorizontalLayout {
                             spacing: (10px * S.k);
                             alignment: center;
                             Text { text: root.sort-label; font-size: (20px * root.library-type-scale); color: Theme.text; vertical-alignment: center; }
                             Image { source: Icons.chevd; colorize: Theme.text3; width: (20px * S.k); height: (20px * S.k); y: (parent.height - (20px * S.k)) / 2; }
                         }
-                        TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.sort, 0); } }
+                        ta-sort := TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.sort, 0); } }
                     }
                     Rectangle { horizontal-stretch: 1; }
                     density := Rectangle {
                         width: density-row.preferred-width;
-                        border-radius: (31px * S.k); background: #ffffff0b; border-width: 1px; border-color: Theme.line;
+                        border-radius: (31px * S.k); background: #ffffff0f;
                         density-row := HorizontalLayout {
                             padding: (5px * S.k); spacing: (4px * S.k);
                             for label[i] in [root.width < 1000px ? "Roomy" : "Comfortable", "Compact"]: Rectangle {
                                 width: dt.preferred-width + (28px * S.k);
                                 border-radius: (26px * S.k);
                                 property <bool> chosen: root.library-compact == (i == 1);
-                                background: chosen ? #ffffff20 : transparent;
-                                border-width: root.zone == Zone.density && root.idx == i && root.overlay == 0 ? (2px * S.k) : 0;
-                                border-color: Theme.ring;
+                                background: chosen ? #ffffff24 : transparent;
+                                border-width: root.zone == Zone.density && root.idx == i && root.overlay == 0 ? (3px * S.k) : 0;
+                                border-color: #f5f7fb;
                                 dt := Text { text: label; font-size: (17px * root.library-type-scale); color: chosen ? Theme.text : Theme.text3; vertical-alignment: center; }
                                 TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.density, i); } }
                             }
@@ -1005,7 +1011,7 @@ export component AppWindow inherits Window {
                     width: root.width - (192px * S.k);
                     height: (52px * S.k);
                     for g in root.status-filters: LibraryFilter {
-                        x: g.x; y: (4px * S.k); data: g; type-scale: root.library-type-scale;
+                        x: g.x; y: (4px * S.k); data: g; type-scale: root.library-type-scale; tab: true;
                         focused: root.zone == Zone.chips && root.idx == g.index && root.overlay == 0;
                         clicked => { root.click(Zone.chips, g.index); }
                     }
@@ -1027,7 +1033,7 @@ export component AppWindow inherits Window {
                 Rectangle {
                     x: (96px * S.k); y: (254px * S.k); width: root.width - (192px * S.k);
                     height: (52px * S.k);
-                    Text { x: 0; y: 0; height: parent.height; text: "GENRE"; font-size: (15px * root.library-type-scale); font-weight: 600; color: Theme.text3; width: (76px * S.k); horizontal-alignment: left; vertical-alignment: center; }
+                    Text { x: 0; y: 0; height: parent.height; text: "Genre"; font-size: (17px * root.library-type-scale); font-weight: 500; color: Theme.hint; width: (76px * S.k); horizontal-alignment: left; vertical-alignment: center; }
                     Rectangle {
                         x: (80px * S.k); y: (6px * S.k); width: (36px * S.k); height: (36px * S.k);
                         border-radius: (18px * S.k); background: root.genres-x < 0 ? #ffffff14 : transparent;
@@ -2193,54 +2199,54 @@ export component AppWindow inherits Window {
         }
 
         // ------------------------------------------------------------ OPTIONS MENU
+        // A narrow card of words, as a console's: from Home's ··· it rises beside the button;
+        // elsewhere it sits in the middle.
         if root.overlay == 5: Rectangle {
             property <bool> entered: false;
             init => { entered = true; }
-            background: entered ? #03050c99 : #03050c00;
+            background: entered ? #03050c66 : #03050c00;
             animate background { duration: 200ms; }
             TouchArea { clicked => { root.click(Zone.menu, -1); } }
-            Rectangle {
-                x: (root.width - self.width) / 2;
-                y: (root.height - self.height) / 2;
-                opacity: entered ? 1 : 0;
-                transform-scale: entered ? 1.0 : 0.94;
-                animate opacity { duration: 180ms; easing: ease-out-quad; }
-                animate transform-scale { duration: 320ms; easing: ease-out-back; }
-                width: (520px * S.k);
+            menu-card := Rectangle {
+                property <bool> anchored: root.menu-anchor == 1;
+                width: (440px * S.k);
                 height: menu-col.preferred-height;
-                border-radius: (22px * S.k);
-                background: #121a31fa;
+                x: anchored ? (440px * S.k) : (root.width - self.width) / 2;
+                // Its bottom level with the hero's buttons (see HeroView's place on Home).
+                y: anchored ? max((110px * S.k), root.height - (196px * S.k) - self.height + (entered ? 0 : (16px * S.k)))
+                    : (root.height - self.height) / 2 + (entered ? 0 : (16px * S.k));
+                opacity: entered ? 1 : 0;
+                animate opacity { duration: 180ms; easing: ease-out-quad; }
+                animate y { duration: 300ms; easing: ease-out-expo; }
+                border-radius: (18px * S.k);
+                background: #1a1e2bfa;
                 border-width: 1px;
-                border-color: Theme.line;
+                border-color: #ffffff1f;
                 drop-shadow-blur: (40px * S.k);
                 drop-shadow-color: #00000099;
                 TouchArea {}
                 menu-col := VerticalLayout {
-                    padding: (18px * S.k);
-                    spacing: (6px * S.k);
-                    Text {
-                        text: root.menu-title;
-                        font-size: (20px * S.k);
-                        font-weight: 600;
-                        color: Theme.text2;
-                        overflow: elide;
-                        horizontal-alignment: left;
+                    padding: (12px * S.k);
+                    spacing: (2px * S.k);
+                    HorizontalLayout {
+                        padding-left: (16px * S.k); padding-right: (16px * S.k);
+                        height: (40px * S.k);
+                        Text { text: root.menu-title; font-size: (16px * S.k); font-weight: 500; color: Theme.hint; overflow: elide; vertical-alignment: center; }
                     }
-                    Rectangle { height: (6px * S.k); }
                     for m[i] in root.menu-items: Rectangle {
-                        height: (58px * S.k);
-                        border-radius: (12px * S.k);
+                        height: (54px * S.k);
+                        border-radius: (10px * S.k);
                         property <bool> f: root.zone == Zone.menu && root.idx == i;
-                        background: f ? #ffffff : transparent;
-                        HorizontalLayout {
-                            padding-left: (18px * S.k);
-                            padding-right: (18px * S.k);
-                            spacing: (16px * S.k);
-                            Image { source: Icons.get(m.icon); colorize: f ? #0a0d18 : Theme.text2; width: (24px * S.k); height: (24px * S.k); y: (17px * S.k); }
-                            // Long labels (a game's file names) stay inside the menu.
-                            Text { text: m.label; font-size: (20px * S.k); color: f ? #0a0d18 : Theme.text; vertical-alignment: center; overflow: elide; horizontal-stretch: 1; min-width: 0; }
+                        background: f ? #f5f7fb : ta-m.has-hover ? #ffffff14 : transparent;
+                        animate background { duration: 100ms; }
+                        // Long labels (a game's file names) stay inside the menu.
+                        Text {
+                            x: (16px * S.k); width: parent.width - (32px * S.k);
+                            text: m.label; font-size: (20px * S.k);
+                            color: f ? #0a0d18 : Theme.text;
+                            vertical-alignment: center; overflow: elide;
                         }
-                        TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.menu, i); } }
+                        ta-m := TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.menu, i); } }
                     }
                 }
             }
@@ -2999,7 +3005,7 @@ export component AppWindow inherits Window {
             Rectangle {
                 y: parent.height - self.height;
                 height: panel.preferred-height;
-                background: @linear-gradient(180deg, #0c1430f5 0%, #060914fc 100%);
+                background: @linear-gradient(180deg, #151926f5 0%, #090b12fc 100%);
                 drop-shadow-blur: (48px * S.k);
                 drop-shadow-color: #000000cc;
                 Rectangle { y: 0; height: 1px; background: Theme.line; }
@@ -3015,9 +3021,9 @@ export component AppWindow inherits Window {
                             width: sk.keys-width;
                             height: (58px * S.k);
                             border-radius: (29px * S.k);
-                            background: #232c47;
-                            border-width: (2px * S.k);
-                            border-color: #3d8bff88;
+                            background: #ffffff1f;
+                            border-width: (3px * S.k);
+                            border-color: #f5f7fb;
                             HorizontalLayout {
                                 padding-left: (22px * S.k);
                                 padding-right: (24px * S.k);

@@ -52,13 +52,13 @@ Git identity in this repo: `Matheus Martucci Rodrigues <88255921+m1theusr@users.
 ## Build and test
 
 While working, one command builds, runs the tests and shoots the screens (tests and screens side by
-side), in about 2 minutes; an edit rebuilds in ~15 s:
+side), in about 2–3 minutes; a UI edit rebuilds in under a minute:
 
 ```bash
 distrobox enter azrak-dev -- bash -c 'cd ~/Projects/azrak-launcher && scripts/check.sh'   # or: scripts/check.sh 1280x720 1920x1080
 ```
 
-It uses the `quick` profile (Cargo.toml: light optimisation for our code, libraries fully optimised
+It uses the `quick` profile (Cargo.toml: our code unoptimised and incremental, libraries fully optimised
 and built once, shared with the tests) and links with mold (`sudo apt install mold` in the box).
 Group a whole area's work in one PR and run this once at the end, not after every step.
 

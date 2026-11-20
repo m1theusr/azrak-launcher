@@ -4,18 +4,37 @@ export component LibraryFilter inherits Rectangle {
     in property <GenreChip> data;
     in property <bool> focused;
     in property <float> type-scale;
+    // The status row reads as tabs, as a console's library: words, the chosen one underlined.
+    in property <bool> tab;
     callback clicked();
     width: data.w;
     height: (44px * S.k);
     border-radius: (22px * S.k);
-    background: data.on ? #ffffff : ta.has-hover ? #ffffff20 : #ffffff0d;
-    border-width: focused ? (3px * S.k) : 1px;
-    border-color: focused ? (data.on ? Theme.accent : Theme.ring) : Theme.line;
+    background: focused ? #ffffff1c
+        : root.tab ? (ta.has-hover ? #ffffff0f : transparent)
+        : data.on ? #f5f7fb : ta.has-hover ? #ffffff1a : transparent;
+    border-width: focused ? (3px * S.k) : root.tab || data.on ? 0 : 1px;
+    border-color: focused ? #f5f7fb : #ffffff1f;
     animate background { duration: 120ms; }
     HorizontalLayout {
         alignment: center; spacing: (6px * S.k);
-        Text { text: root.data.label; font-size: (18px * root.type-scale); font-weight: root.data.on ? 600 : 400; color: root.data.on ? #0a0d18 : Theme.text2; vertical-alignment: center; }
-        Text { text: root.data.count; font-size: (16px * root.type-scale); color: root.data.on ? #56607a : Theme.text3; vertical-alignment: center; }
+        Text {
+            text: root.data.label; font-size: (18px * root.type-scale);
+            font-weight: root.data.on ? 600 : 400;
+            color: !root.tab && root.data.on && !root.focused ? #0a0d18 : root.data.on || root.focused ? Theme.text : Theme.text2;
+            vertical-alignment: center;
+        }
+        Text {
+            text: root.data.count; font-size: (15px * root.type-scale);
+            color: !root.tab && root.data.on && !root.focused ? #56607a : Theme.text3;
+            vertical-alignment: center;
+        }
+    }
+    if root.tab && root.data.on: Rectangle {
+        x: (parent.width - self.width) / 2; y: parent.height - (3px * S.k);
+        width: parent.width - (28px * S.k); height: (3px * S.k);
+        border-radius: (1.5px * S.k);
+        background: #f5f7fb;
     }
     ta := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
 }
@@ -35,13 +54,13 @@ export component LibrarySortPicker inherits Rectangle {
         y: (184px * S.k);
         width: min(root.width - (192px * S.k), max((440px * S.k), (360px * root.type-scale)));
         height: body.preferred-height;
-        border-radius: (18px * S.k); background: #121b30fc;
+        border-radius: (18px * S.k); background: #1a1e2bfa;
         border-width: 1px; border-color: #ffffff28;
         drop-shadow-blur: (36px * S.k); drop-shadow-color: #00000088;
         TouchArea { }
         body := VerticalLayout {
             padding: (12px * S.k); spacing: (4px * S.k);
-            Text { text: "SORT BY"; font-size: (15px * root.type-scale); font-weight: 600; color: Theme.text3; height: (30px * S.k); }
+            Text { text: "Sort by"; font-size: (16px * root.type-scale); font-weight: 500; color: Theme.hint; height: (32px * S.k); vertical-alignment: center; x: (14px * S.k); }
             for label[i] in root.options: Rectangle {
                 height: max((50px * S.k), (34px * root.type-scale));
                 border-radius: (10px * S.k);
