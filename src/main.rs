@@ -23,6 +23,7 @@ mod exfat;
 mod control_center;
 mod welcome;
 mod theme;
+mod toast;
 mod pfs;
 mod rar;
 mod package;

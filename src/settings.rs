@@ -813,6 +813,7 @@ impl App {
                 self.rescan_library();
                 let n = self.locals.len();
                 self.note_setting(SId::Rescan, &format!("{} found", plural(n, "game")), 1);
+                self.toast("Game folders scanned", &format!("{} found", plural(n, "game")), "folder", crate::toast::DONE);
             }
             SId::Quit => {
                 crate::app::quit("Settings → Quit SwarmPlay");
