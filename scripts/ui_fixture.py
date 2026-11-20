@@ -45,3 +45,28 @@ def install_game(games: Path, game: Path | None) -> None:
         (games / game.name).symlink_to(game.resolve())
     else:
         stand_in_game(games)
+
+
+def seed_downloads(home: Path, count: int = 3) -> None:
+    """Paused downloads of real catalog games (from the seeded cache), so the Downloads page, the
+    top bar's ring and Welcome's widget have something to show. Nothing starts: reopening never
+    resumes a transfer, and sharing is off in the run's settings."""
+    catalog = home / ".cache/azrak/catalog-rutracker.json"
+    if not catalog.exists():
+        return
+    games = [g for g in json.loads(catalog.read_text()).get("games", [])
+             if g.get("cover") and g.get("magnet", "").startswith("magnet:?xt=urn:btih:")][:count]
+    jobs = []
+    for i, game in enumerate(games):
+        key = game["magnet"].split("btih:")[1].split("&")[0].lower()
+        total = int(float(game.get("size_gb") or 10) * (1 << 30))
+        jobs.append({
+            "key": key, "topic": game["id"], "name": game["name"], "magnet": f"magnet:?xt=urn:btih:{key}",
+            "folder": str(home / "Downloads/Azrak" / key), "state": "Paused",
+            "done": int(total * (0.72, 0.35, 0.08)[i % 3]), "total": total, "file_count": 1,
+            "files": [], "error": "", "added": 1_700_000_000 + i,
+        })
+    store = home / ".config/azrak/transfers"
+    store.mkdir(parents=True, exist_ok=True)
+    (store / "jobs.json").write_text(json.dumps({"schema": 1, "jobs": jobs}))
+

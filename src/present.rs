@@ -1442,7 +1442,8 @@ impl App {
         if let Some(img) = img.or(thumb) {
             ui.set_viewer_image(img);
         }
-        ui.set_viewer_count(format!("{} / {}", self.viewer_i + 1, self.hub_shots.len()).into());
+        ui.set_viewer_count(format!("{} of {}", self.viewer_i + 1, self.hub_shots.len()).into());
+        ui.set_viewer_index(self.viewer_i as i32);
     }
 
     pub fn push_menu(&mut self, title: &str) {
