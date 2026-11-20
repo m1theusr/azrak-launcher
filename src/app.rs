@@ -2182,7 +2182,7 @@ impl App {
         }
         // Clicks on an overlay backdrop close it.
         if idx < 0 {
-            self.back();
+            self.back_soft();
             return;
         }
         if zone == Z_CONTROLS && self.overlay == Overlay::Controls {
@@ -2269,8 +2269,8 @@ impl App {
     }
 
     pub fn act(&mut self, a: Act) {
-        // The Hub is going (a quarter second): nothing lands on it meanwhile.
-        if self.overlay == Overlay::Hub && self.ui().get_hub_leaving() {
+        // The Hub is going (a quarter second), or a page fading out: nothing lands on it meanwhile.
+        if (self.overlay == Overlay::Hub && self.ui().get_hub_leaving()) || self.ui().get_closing() != 0 {
             return;
         }
         if self.boot.active {
@@ -2288,7 +2288,7 @@ impl App {
             Overlay::Viewer => self.act_viewer(a),
             Overlay::Trailer => self.act_trailer(a),
             Overlay::Controls => match a {
-                Act::Back | Act::Confirm => self.back(),
+                Act::Back | Act::Confirm => self.back_soft(),
                 Act::Left | Act::Right => {
                     let ui = self.ui();
                     ui.set_controls_ps4(!ui.get_controls_ps4());
@@ -2725,7 +2725,7 @@ impl App {
                 self.push_viewer();
                 audio::play(Sound::Move);
             }
-            Act::Back | Act::Confirm => self.back(),
+            Act::Back | Act::Confirm => self.back_soft(),
             _ => {}
         }
     }
@@ -2735,7 +2735,7 @@ impl App {
         match a {
             Act::Up if self.idx > 0 => self.move_focus(Z_MENU, self.idx - 1),
             Act::Down if self.idx + 1 < n => self.move_focus(Z_MENU, self.idx + 1),
-            Act::Back | Act::Options => self.back(),
+            Act::Back | Act::Options => self.back_soft(),
             Act::Confirm => {
                 let act = self.menu_actions.get(self.idx as usize).map(|a| a.id);
                 let t = self.menu_target;
@@ -2748,6 +2748,24 @@ impl App {
             }
             _ => {}
         }
+    }
+
+    /// Back pressed (or a click outside) on a page or card that goes out with a fade: it fades for
+    /// a moment, then closes. Everything else closes at once. (Code that needs the page gone right
+    /// away calls `back`.)
+    pub fn back_soft(&mut self) {
+        const SOFT: [Overlay; 6] = [Overlay::Settings, Overlay::Menu, Overlay::Viewer, Overlay::Downloads, Overlay::Controls, Overlay::ControlCenter];
+        let ov = self.overlay;
+        if !SOFT.contains(&ov) || (ov == Overlay::Downloads && self.ui().get_download_consent()) {
+            return self.back();
+        }
+        if self.ui().get_closing() != 0 { return; }
+        audio::play(Sound::Back);
+        self.ui().set_closing(ov as i32);
+        slint::Timer::single_shot(Duration::from_millis(180), move || with_app(move |app| {
+            if app.overlay == ov && app.ui().get_closing() == ov as i32 { app.back(); }
+            app.ui().set_closing(0);
+        }));
     }
 
     pub fn back(&mut self) {
@@ -2780,7 +2798,8 @@ impl App {
             if self.overlay == Overlay::Setup {
                 self.setup_closed();
             }
-            audio::play(Sound::Back);
+            // (A soft close played it when Back was pressed.)
+            if self.ui().get_closing() == 0 { audio::play(Sound::Back); }
             if self.overlay == Overlay::Settings && self.edit_index >= 0 {
                 self.finish_edit(None);
             }

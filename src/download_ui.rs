@@ -836,7 +836,7 @@ impl App {
         let buttons = self.download_model.row_data(sel).map_or(0, |row| row.actions.row_count()) as i32;
         match action {
             Act::Back if self.dl_btn >= 0 => { self.dl_btn = -1; audio::play(Sound::Back); }
-            Act::Back => return self.back(),
+            Act::Back => return self.back_soft(),
             Act::TabPrev => return self.filter_downloads((self.dl_filter + 3) % 4),
             Act::TabNext => return self.filter_downloads((self.dl_filter + 1) % 4),
             _ if keys.is_empty() => return,

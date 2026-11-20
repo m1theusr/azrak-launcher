@@ -29,7 +29,7 @@ impl App {
     /// Guide (or F1): open the panel, or close it when it's open.
     pub fn toggle_control_center(&mut self) {
         if self.overlay == Overlay::ControlCenter {
-            return self.back();
+            return self.back_soft();
         }
         if self.boot.active || BUSY.contains(&self.overlay) {
             return;
@@ -51,20 +51,25 @@ impl App {
             return self.move_focus(Z_CONTROL_CENTER, to as i32);
         }
         match a {
-            Act::Back => self.back(),
+            Act::Back => self.back_soft(),
             Act::Confirm => {
                 let item = items[i];
-                // The panel closes first, so what's chosen opens over the screen underneath.
-                self.back();
-                match item {
-                    "resume" => self.resume_game(None),
-                    "stop" => self.stop_game(None),
-                    "downloads" => { let key = self.ring_key.clone(); self.open_downloads(key.as_deref()) }
-                    "library" => self.switch_view(1, true),
-                    "settings" => self.open_settings(),
-                    "controls" => self.open_controls(),
-                    _ => self.open_power_menu(),
-                }
+                // The panel slides away first, then what's chosen opens over the screen underneath.
+                audio::play(Sound::Select);
+                self.ui().set_closing(Overlay::ControlCenter as i32);
+                slint::Timer::single_shot(std::time::Duration::from_millis(170), move || with_app(move |app| {
+                    if app.overlay == Overlay::ControlCenter { app.back(); }
+                    app.ui().set_closing(0);
+                    match item {
+                        "resume" => app.resume_game(None),
+                        "stop" => app.stop_game(None),
+                        "downloads" => { let key = app.ring_key.clone(); app.open_downloads(key.as_deref()) }
+                        "library" => app.switch_view(1, true),
+                        "settings" => app.open_settings(),
+                        "controls" => app.open_controls(),
+                        _ => app.open_power_menu(),
+                    }
+                }));
             }
             _ => {}
         }
