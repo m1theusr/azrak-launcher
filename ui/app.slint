@@ -1826,6 +1826,23 @@ export component AppWindow inherits Window {
                 opacity: self.shown ? 1 : 0;
                 animate y { duration: 420ms; easing: ease-out-expo; }
                 animate opacity { duration: 260ms; easing: ease-out-quad; }
+                // One outline that glides to the row chosen (a section, or Quit under them).
+                Rectangle {
+                    property <int> n: root.settings-sections.length;
+                    property <bool> foot: root.idx >= self.n;
+                    x: 0;
+                    width: parent.width;
+                    y: self.foot ? self.n * (74px * S.k) + (22px * S.k) + (root.idx - self.n) * (64px * S.k) : max(0, root.idx) * (74px * S.k);
+                    height: self.foot ? (64px * S.k) : (74px * S.k);
+                    border-radius: (14px * S.k);
+                    property <bool> danger: self.foot && root.settings-footer[root.idx - self.n].danger;
+                    background: self.danger ? #ff5a6a33 : #ffffff1c;
+                    border-width: (3px * S.k);
+                    border-color: self.danger ? #ff8a9a : #f5f7fb;
+                    opacity: root.zone == Zone.settings-nav ? 1 : 0;
+                    animate y, height { duration: 200ms; easing: ease-out-quart; }
+                    animate background, border-color { duration: 160ms; }
+                }
                 VerticalLayout {
                     alignment: start;
                     spacing: 0;
@@ -1833,10 +1850,13 @@ export component AppWindow inherits Window {
                         property <bool> f: root.zone == Zone.settings-nav && root.idx == i;
                         height: (74px * S.k);
                         border-radius: (14px * S.k);
-                        background: f ? #ffffff1c : ta-root.has-hover ? #ffffff0d : transparent;
-                        border-width: f ? (3px * S.k) : 0;
-                        border-color: #f5f7fb;
+                        background: !f && ta-root.has-hover ? #ffffff0d : transparent;
                         animate background { duration: 120ms; }
+                        // The list comes in one row after another.
+                        property <bool> shown: false;
+                        init => { self.shown = true; }
+                        opacity: self.shown ? 1 : 0;
+                        animate opacity { duration: 260ms; delay: i * 28ms; easing: ease-out-quad; }
                         if !f: Rectangle { x: (20px * S.k); y: parent.height - 1px; width: parent.width - (40px * S.k); height: 1px; background: #ffffff14; }
                         HorizontalLayout {
                             padding-left: (26px * S.k); padding-right: (26px * S.k);
@@ -1867,9 +1887,7 @@ export component AppWindow inherits Window {
                         property <bool> f: root.zone == Zone.settings-nav && root.idx == root.settings-sections.length + k;
                         height: (64px * S.k);
                         border-radius: (14px * S.k);
-                        background: f ? (q.danger ? #ff5a6a33 : #ffffff1c) : ta-q.has-hover ? #ffffff0d : transparent;
-                        border-width: f ? (3px * S.k) : 0;
-                        border-color: q.danger ? #ff8a9a : #f5f7fb;
+                        background: !f && ta-q.has-hover ? #ffffff0d : transparent;
                         HorizontalLayout {
                             padding-left: (26px * S.k); padding-right: (26px * S.k);
                             spacing: (22px * S.k);
@@ -1890,6 +1908,19 @@ export component AppWindow inherits Window {
                 init => { self.shown = true; }
                 opacity: self.shown ? 1 : 0;
                 animate opacity { duration: 220ms; easing: ease-out-quad; }
+                // The sections' outline glides to the one chosen.
+                Rectangle {
+                    x: (96px * S.k) - (4px * S.k);
+                    y: (140px * S.k) + max(0, min(root.idx, root.settings-sections.length - 1)) * (60px * S.k);
+                    width: (360px * S.k); height: (56px * S.k);
+                    border-radius: (12px * S.k);
+                    background: #ffffff1c;
+                    border-width: (3px * S.k);
+                    border-color: #f5f7fb;
+                    opacity: root.zone == Zone.settings-nav ? 1 : 0;
+                    animate y { duration: 190ms; easing: ease-out-quart; }
+                    animate opacity { duration: 140ms; }
+                }
                 VerticalLayout {
                     x: (96px * S.k) - (4px * S.k); y: (140px * S.k);
                     width: (360px * S.k);
@@ -1900,9 +1931,7 @@ export component AppWindow inherits Window {
                         property <bool> f: root.zone == Zone.settings-nav && root.idx == i;
                         height: (56px * S.k);
                         border-radius: (12px * S.k);
-                        background: f ? #ffffff1c : chosen ? #ffffff12 : ta-sec.has-hover ? #ffffff0a : transparent;
-                        border-width: f ? (3px * S.k) : 0;
-                        border-color: #f5f7fb;
+                        background: !f && chosen ? #ffffff12 : !f && ta-sec.has-hover ? #ffffff0a : transparent;
                         animate background { duration: 120ms; }
                         HorizontalLayout {
                             padding-left: (18px * S.k); padding-right: (14px * S.k);
@@ -1958,9 +1987,10 @@ export component AppWindow inherits Window {
                                     // A plain line in a list, as a console's: the one chosen is outlined.
                                     border-radius: (14px * S.k);
                                     background: f ? (s.danger ? #ff5a6a33 : #ffffff1c) : ta-row.has-hover ? #ffffff0d : transparent;
-                                    border-width: f ? (3px * S.k) : 0;
-                                    border-color: s.danger ? Theme.danger : #f5f7fb;
-                                    animate background { duration: 120ms; }
+                                    // Always outlined, in a colour that fades in: no snap from row to row.
+                                    border-width: (3px * S.k);
+                                    border-color: !f ? #f5f7fb00 : s.danger ? Theme.danger : #f5f7fb;
+                                    animate background, border-color { duration: 170ms; easing: ease-out-quad; }
                                     if !f: Rectangle { x: (20px * S.k); y: parent.height - 1px; width: parent.width - (40px * S.k); height: 1px; background: #ffffff14; }
                                     ta-row := TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.settings, i); } }
                                     words := VerticalLayout {
@@ -2277,6 +2307,17 @@ export component AppWindow inherits Window {
                 drop-shadow-blur: (40px * S.k);
                 drop-shadow-color: #00000099;
                 TouchArea {}
+                // One highlight that glides to the item chosen (under the words).
+                Rectangle {
+                    x: (12px * S.k);
+                    width: parent.width - (24px * S.k);
+                    height: (54px * S.k);
+                    y: (12px * S.k) + (42px * S.k) + max(0, root.idx) * (56px * S.k);
+                    border-radius: (10px * S.k);
+                    background: #f5f7fb;
+                    opacity: root.zone == Zone.menu ? 1 : 0;
+                    animate y { duration: 190ms; easing: ease-out-quart; }
+                }
                 menu-col := VerticalLayout {
                     padding: (12px * S.k);
                     spacing: (2px * S.k);
@@ -2289,13 +2330,20 @@ export component AppWindow inherits Window {
                         height: (54px * S.k);
                         border-radius: (10px * S.k);
                         property <bool> f: root.zone == Zone.menu && root.idx == i;
-                        background: f ? #f5f7fb : ta-m.has-hover ? #ffffff14 : transparent;
+                        background: !f && ta-m.has-hover ? #ffffff14 : transparent;
                         animate background { duration: 100ms; }
+                        // They come in one after another.
+                        property <bool> shown: false;
+                        init => { self.shown = true; }
+                        opacity: self.shown ? 1 : 0;
+                        animate opacity { duration: 220ms; delay: i * 22ms; easing: ease-out-quad; }
                         // Long labels (a game's file names) stay inside the menu.
                         Text {
-                            x: (16px * S.k); width: parent.width - (32px * S.k);
+                            x: (16px * S.k) + (parent.shown ? 0 : (14px * S.k)); width: parent.width - (32px * S.k);
                             text: m.label; font-size: (20px * S.k);
                             color: f ? #0a0d18 : Theme.text;
+                            animate color { duration: 150ms; }
+                            animate x { duration: 300ms; delay: i * 22ms; easing: ease-out-expo; }
                             vertical-alignment: center; overflow: elide;
                         }
                         ta-m := TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.menu, i); } }
