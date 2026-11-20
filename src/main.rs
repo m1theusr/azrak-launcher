@@ -29,6 +29,7 @@ mod storage;
 mod overlay;
 mod overlay_ui;
 mod ipc;
+mod wine_pads;
 mod pfs;
 mod rar;
 mod package;

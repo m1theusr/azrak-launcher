@@ -344,7 +344,14 @@ impl Sessions {
             return Err(format!("{} is already running. Stop it first.", s.name));
         }
         if game.platform == crate::platform::Platform::Pc {
-            let command = pc_command(game)?;
+            let mut command = pc_command(game)?;
+            // Controllers as XInput ones: the game's own Wine prefix (a repack's), SwarmPlay's
+            // prefix for it, and Proton (src/wine_pads.rs).
+            if cfg.wine_sdl_pads {
+                crate::wine_pads::prefer_sdl(&game.path);
+                crate::wine_pads::prefer_sdl(&crate::util::data_dir().join("prefixes").join(&game.id));
+                command.env("PROTON_PREFER_SDL", "1");
+            }
             return self.spawn(&mut inner, game, command, true);
         }
         let ps4 = game.platform == crate::platform::Platform::Ps4;
