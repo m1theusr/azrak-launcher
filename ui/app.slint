@@ -267,6 +267,7 @@ export component AppWindow inherits Window {
     in property <int> ring-kind;
     // The top bar's avatar: the first letter of who's signed in.
     in property <string> user-initial: "?";
+    in property <string> user-name;
     in property <string> ring-label;
     in property <string> ring-suffix;
     in property <string> ring-sizer;
@@ -2532,7 +2533,34 @@ export component AppWindow inherits Window {
                     }
                 }
                 Rectangle { height: (24px * S.k); }
-                Text { text: root.boot-stick ? "AZRAKOS" : "AZRAK LAUNCHER"; font-size: (19px * S.k); font-weight: 600; letter-spacing: (3px * S.k); color: Theme.text2; horizontal-alignment: center; }
+                Text { text: root.boot-stick ? "AZRAKOS" : "SWARMPLAY"; font-size: (19px * S.k); font-weight: 600; letter-spacing: (3px * S.k); color: Theme.text2; horizontal-alignment: center; }
+                // Every start after the first, as a console's: who's playing, welcomed back.
+                if !root.boot-first: VerticalLayout {
+                    spacing: 0;
+                    property <bool> came: false;
+                    init => { self.came = true; }
+                    Rectangle { height: (54px * S.k); }
+                    HorizontalLayout {
+                        alignment: center;
+                        av-boot := Rectangle {
+                            width: (148px * S.k); height: self.width;
+                            border-radius: self.width / 2;
+                            background: @linear-gradient(135deg, Theme.accent.brighter(0.35) 0%, Theme.accent.darker(0.45) 100%);
+                            border-width: (4px * S.k);
+                            border-color: #f5f7fb;
+                            drop-shadow-blur: (34px * S.k);
+                            drop-shadow-color: Theme.glow;
+                            Text { text: root.user-initial; font-size: (64px * S.k); font-weight: 600; color: #ffffff; }
+                        }
+                    }
+                    Rectangle { height: (26px * S.k); }
+                    Text {
+                        text: root.user-name != "" ? "Welcome back, " + root.user-name : "Welcome back";
+                        font-size: (40px * S.k); font-weight: 600; color: Theme.text;
+                        horizontal-alignment: center;
+                    }
+                    Rectangle { height: (30px * S.k); }
+                }
                 Rectangle { height: (18px * S.k); }
                 if root.boot-first: Text {
                     text: root.boot-stick ? "Getting AzrakOS ready" : "Welcome";
@@ -2629,10 +2657,10 @@ export component AppWindow inherits Window {
                             x: 0;
                             width: parent.width * root.boot-progress;
                             border-radius: (3px * S.k);
-                            background: @linear-gradient(90deg, #2f6dff 0%, #6ea8ff 60%, #b4d0ff 100%);
+                            background: @linear-gradient(90deg, Theme.accent 0%, Theme.accent.brighter(0.5) 60%, Theme.accent.brighter(1.0) 100%);
                             animate width { duration: 400ms; easing: ease-out-quart; }
                             drop-shadow-blur: (12px * S.k);
-                            drop-shadow-color: #3d8bff99;
+                            drop-shadow-color: Theme.glow;
                         }
                         Rectangle {
                             x: mod(boot.t * 0.6, 1.4) * parent.width - self.width;
