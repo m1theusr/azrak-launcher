@@ -52,6 +52,9 @@ STEPS = [
     ("09d-settings-themed", ["Escape", "sleep:0.6"]),                                # back on the first page, themed
     ("09e-settings-sound", ["Up", "Up", "Up", "Up", "Return", "sleep:0.8"]),               # Sound: volume, mute, output
     ("09f-settings-storage", ["Escape", "sleep:0.5", "Up", "Up", "Return", "sleep:0.8"]),  # Storage: the places and their room
+    ("09f2-storage-drives", ["Down"] * 5 + ["Return", "sleep:0.9"]),                   # Add a place: the drives
+    ("09f3-storage-folders", ["Return", "sleep:0.8", "Down", "sleep:0.4"]),            # Home folder: its folders
+    ("09f4-storage-back", ["Escape", "sleep:0.4", "Escape", "sleep:0.8"]),              # Up, closed: Storage again
     ("09g-settings-notifications", ["Escape", "sleep:0.5", "Down", "Down", "Down", "Return", "sleep:0.8"]),
     ("10-settings-bottom", ["Escape", "sleep:0.6"] + ["Down"] * 12 + ["sleep:0.8"]), # Quit, at the end
     ("11-toasts", ["Escape", "sleep:0.5", "Home", "Down", "Right", "Right", "Right", "Return", "sleep:0.4",

@@ -60,6 +60,8 @@ pub enum SId {
     OverlayPause,
     // Storage (src/storage.rs)
     StoragePlace(u16),
+    /// A line of a drive's legend: games, downloads, media, other.
+    StoragePart(u16, u8),
     StorageAdd,
     // Sound (src/sound.rs)
     SoundVolume,
@@ -578,6 +580,10 @@ impl App {
             Act::Left | Act::Right if kind == 3 => self.settings_change(self.idx as usize, if a == Act::Left { -1 } else { 1 }),
             Act::Left => to_nav(self),
             Act::Confirm => self.settings_activate(self.idx as usize),
+            // □ on a place that was added: off the list.
+            Act::Trailer => {
+                if let Some(SId::StoragePlace(n)) = self.settings_ids.get(self.idx.max(0) as usize).copied() { self.storage_remove(n as usize); }
+            }
             _ => {}
         }
     }
@@ -628,6 +634,9 @@ impl App {
             // Text grows faster than the column on small windows (r), so fewer fit on a line.
             let per_line = (if row.kind == 1 || row.value.chars().count() > 24 { 55.0 } else { 95.0 } / r).max(10.0) as usize;
             let hint_lines = row.hint.chars().count().div_ceil(per_line) as f32;
+            // A drive (its bar) and its legend's lines have heights of their own (storage.rs).
+            if row.kind == 5 { y += 80.0 + 48.0 * r + 4.0; continue; }
+            if row.kind == 6 { y += if row.hint.is_empty() { 62.0 } else { 46.0 + 42.0 * r } + 4.0; continue; }
             let h = 32.0 + 26.0 * r + if hint_lines > 0.0 { 5.0 + hint_lines * 22.0 * r } else { 0.0 } + if self.edit_index == i as i32 { 60.0 * r } else { 0.0 };
             y += f32::max(h, 84.0) + 10.0;
         }
@@ -773,24 +782,24 @@ impl App {
         }
         match id {
             SId::StoragePlace(n) => self.storage_use(n as usize),
+            SId::StoragePart(n, k) => self.storage_part(n as usize, k as usize),
+            SId::StorageAdd => self.open_folder_pick(crate::folder_pick::PickFor::Place),
+            SId::InstallDir => self.open_folder_pick(crate::folder_pick::PickFor::Install),
+            SId::DownloadDir => self.open_folder_pick(crate::folder_pick::PickFor::Download),
             SId::NotifPopups | SId::NotifSound | SId::NotifDesktop | SId::NotifCat(_) => {
                 let on = self.settings_rows[i].on;
                 self.settings_change(i, if on { -1 } else { 1 });
             }
             SId::NotifSecs | SId::NotifGames | SId::NotifDnd => self.settings_change(i, 1),
             SId::OverlayHelper => self.overlay_helper_pressed(),
-            SId::Emulator | SId::Dirs | SId::Extra | SId::DownloadDir | SId::InstallDir | SId::ThemeImage | SId::StorageAdd => {
+            SId::Emulator | SId::Dirs | SId::Extra | SId::ThemeImage => {
                 let cfg = self.cfg.lock().unwrap().clone();
                 let text = match id {
-                    // Where other drives show up, to finish typing.
-                    SId::StorageAdd => std::env::var("USER").ok().map(|u| format!("/run/media/{u}/")).filter(|p| std::path::Path::new(p).is_dir()).unwrap_or_else(|| "~/".into()),
                     SId::ThemeImage if cfg.theme_image.is_empty() => "~/Pictures/".into(),
                     SId::ThemeImage => cfg.theme_image,
                     SId::Emulator => cfg.emulator,
                     SId::Dirs => cfg.game_dirs.join("; "),
                     SId::Extra => cfg.extra_args,
-                    SId::DownloadDir => cfg.download_dir,
-                    SId::InstallDir => cfg.install_dir,
                     _ => String::new(),
                 };
                 audio::play(Sound::Select);
@@ -919,8 +928,6 @@ impl App {
                 self.note_setting(SId::Dirs, &format!("{} found", plural(n, "installed game")), 1);
             }
             SId::Extra => self.save_cfg(|c| c.extra_args = t),
-            SId::StorageAdd if t == "~/" || t.ends_with("/run/media/") || t.split('/').count() <= 4 && t.starts_with("/run/media/") && t.ends_with('/') => {}
-            SId::StorageAdd => self.storage_add(&t),
             // Left as it opened: nothing chosen.
             SId::ThemeImage if t == "~/Pictures/" => {}
             SId::ThemeImage => self.theme_image_typed(&t),
@@ -932,18 +939,6 @@ impl App {
             SId::VpnAdd if !t.is_empty() => {
                 let file = util::expand_home(&t);
                 self.vpn_task(SId::VpnAdd, "Adding…", move || crate::vpn::nm_import(&file).map(|_| ()));
-            }
-            SId::DownloadDir => {
-                if t.is_empty() || !util::expand_home(&t).is_absolute() {
-                    self.note_setting(SId::DownloadDir, "Not changed: use a full path, like ~/Downloads/PS5", 2);
-                } else {
-                    self.save_cfg(|c| c.download_dir = t);
-                }
-            }
-            SId::InstallDir => {
-                if t.is_empty() || !util::expand_home(&t).is_absolute() {
-                    self.note_setting(SId::InstallDir, "Not changed: use a full path, like ~/Games/PS5", 2);
-                } else { self.save_cfg(|c| c.install_dir = t); }
             }
             _ => {}
         }

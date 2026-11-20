@@ -54,6 +54,7 @@ pub const Z_CONTROL_CENTER: i32 = 27;
 pub const Z_HOME_PEEK: i32 = 28;
 pub const Z_WELCOME: i32 = 29;
 pub const Z_NOTES: i32 = 30;
+pub const Z_PICK: i32 = 31;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Overlay {
@@ -81,6 +82,8 @@ pub enum Overlay {
     ControlCenter = 16,
     /// The list of notifications (src/toast.rs).
     Notifications = 17,
+    /// A drive, then a folder on it (src/folder_pick.rs).
+    Folders = 18,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -410,6 +413,8 @@ pub struct App {
     /// watchers remember (when they last looked, controllers, a low battery told, the day little
     /// room was told, downloads' last progress, downloads waiting for the VPN).
     pub notes: crate::toast::Store,
+    /// The drive and folder picker, while it's open (src/folder_pick.rs).
+    pub pick: Option<crate::folder_pick::Pick>,
     pub popups: Vec<(u64, f64)>,
     pub watch_at: f64,
     pub pads_seen: Vec<String>,
@@ -746,6 +751,7 @@ pub fn run(ui: AppWindow, monitors: Vec<Monitor>, target_monitor: Option<Monitor
         battery_read: 0.0,
         welcome_read: 0.0,
         notes: crate::toast::Store::load(),
+        pick: None,
         popups: Vec::new(),
         watch_at: 0.0,
         pads_seen: Vec::new(),
@@ -2239,6 +2245,9 @@ impl App {
         if zone == Z_POWER && self.overlay == Overlay::Power {
             return self.click_power(idx);
         }
+        if zone == Z_PICK && self.overlay == Overlay::Folders {
+            return self.click_folder_pick(idx);
+        }
         if zone == Z_OS_INSTALL && self.overlay == Overlay::OsInstall {
             if idx < 0 {
                 self.act_os_install(Act::Back);
@@ -2370,6 +2379,7 @@ impl App {
             Overlay::Power => self.act_power(a),
             Overlay::ControlCenter => self.act_control_center(a),
             Overlay::Notifications => self.act_notifications(a),
+            Overlay::Folders => self.act_folder_pick(a),
             Overlay::Settings if self.zone == Z_SETTINGS_NAV => self.act_settings_nav(a),
             Overlay::Settings => self.act_settings_rows(a),
             Overlay::Hub => self.act_hub(a),
@@ -2822,7 +2832,7 @@ impl App {
     /// a moment, then closes. Everything else closes at once. (Code that needs the page gone right
     /// away calls `back`.)
     pub fn back_soft(&mut self) {
-        const SOFT: [Overlay; 7] = [Overlay::Settings, Overlay::Menu, Overlay::Viewer, Overlay::Downloads, Overlay::Controls, Overlay::ControlCenter, Overlay::Notifications];
+        const SOFT: [Overlay; 8] = [Overlay::Settings, Overlay::Menu, Overlay::Viewer, Overlay::Downloads, Overlay::Controls, Overlay::ControlCenter, Overlay::Notifications, Overlay::Folders];
         let ov = self.overlay;
         if !SOFT.contains(&ov) || (ov == Overlay::Downloads && self.ui().get_download_consent()) {
             return self.back();

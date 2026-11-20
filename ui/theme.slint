@@ -136,6 +136,7 @@ export global Zone {
     out property <int> home-peek: 28;
     out property <int> welcome: 29;
     out property <int> notes: 30;
+    out property <int> pick: 31;
 }
 
 // dot: KytyPS5 compatibility level (0 none, 1 in-game, 2 menus, 3 boots, 4 doesn't boot, 5 untested)
@@ -303,6 +304,21 @@ export struct SettingData {
     busy: bool,       // in progress (connecting, searching): a spinner before the value
     has-bar: bool,    // a level (Volume): a bar before the value, filled to `bar` (0–1)
     bar: float,
+    // Storage (src/storage.rs): kind 5 a drive (its bar in parts `segs`, `value2` its free
+    // space), kind 6 a line of its legend (`dot`: 1 games, 2 downloads, 3 media, 4 other).
+    segs: [float],
+    value2: string,
+    dot: int,
+    removable: bool,  // □ takes it off the list
+}
+
+// A line of the drive and folder picker (src/folder_pick.rs): kind 0 a drive, 1 "Use this
+// folder", 2 a folder to go into. warn: low on room, or can't write there.
+export struct PickRow { label: string, sub: string, icon: string, kind: int, has-bar: bool, bar: float, warn: bool }
+
+// The parts of a drive, as a console colours them.
+export global StorageColors {
+    out property <[color]> parts: [#3b8eff, #f08a2c, #8a5cff, #cfd3dc];
 }
 
 // kind 0 info, 1 ok, 2 error. image: a picture for the icon tile (app or game icon), if any.
