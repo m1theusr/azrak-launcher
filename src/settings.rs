@@ -504,7 +504,7 @@ impl App {
         match a {
             // Back from a section's page is its first page; from there it closes.
             Act::Back if !self.settings_root => { audio::play(Sound::Back); self.set_settings_root(true); }
-            Act::Back => self.back(),
+            Act::Back => self.back_soft(),
             Act::Up if i > 0 => { audio::play(Sound::Move); self.focus_settings_nav(i - 1); }
             Act::Down if i + 1 < last => { audio::play(Sound::Move); self.focus_settings_nav(i + 1); }
             Act::Right | Act::Confirm if i < n => {
@@ -531,7 +531,7 @@ impl App {
             // Back leaves a section's page for the first page; Back there closes Settings.
             // Opened onto a row from elsewhere (VPN settings on Downloads), Back goes straight
             // back there.
-            Act::Back if self.settings_direct => self.back(),
+            Act::Back if self.settings_direct => self.back_soft(),
             Act::Back => { to_nav(self); self.set_settings_root(true); }
             Act::Up | Act::Down => {
                 let next = match (pos, a) {

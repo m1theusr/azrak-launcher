@@ -226,6 +226,8 @@ export component AppWindow inherits Window {
     in property <bool> hub-open;
     // The Hub was opened from Home's cards: it rises from under Home, as the page scrolling on.
     in property <bool> hub-scrolled;
+    // The overlay fading out before it closes (src/app.rs back_soft), by its number; 0 none.
+    in property <int> closing;
     // The Hub waits to come in until it's at the section it opens on; it goes out before closing.
     in property <bool> hub-ready: true;
     in property <bool> hub-leaving;
@@ -1790,8 +1792,12 @@ export component AppWindow inherits Window {
             property <bool> entered: false;
             property <bool> in-rows: root.zone == Zone.settings;
             init => { entered = true; }
-            opacity: entered ? 1 : 0;
-            animate opacity { duration: 240ms; easing: ease-out-quad; }
+            // In with a slight zoom; out the same way when Back closes it.
+            property <bool> on: entered && root.closing != 2;
+            opacity: on ? 1 : 0;
+            transform-scale: on ? 1 : 0.985;
+            animate opacity { duration: 260ms; easing: ease-out-quad; }
+            animate transform-scale { duration: 420ms; easing: ease-out-expo; }
             // The theme's wallpaper (Deep blue for the game's art), dimmed for reading.
             Wallpaper { kind: root.wallpaper-kind == 0 ? 1 : root.wallpaper-kind; image: root.wallpaper-image; }
             Rectangle { background: @linear-gradient(180deg, #04060ecc 0%, #04060ee6 40%, #04060ef2 100%); }
@@ -1906,8 +1912,11 @@ export component AppWindow inherits Window {
             if !root.settings-root: Rectangle {
                 property <bool> shown: false;
                 init => { self.shown = true; }
+                // A section's page slides in from the right; the first page rises back.
                 opacity: self.shown ? 1 : 0;
-                animate opacity { duration: 220ms; easing: ease-out-quad; }
+                x: self.shown ? 0 : (56px * S.k);
+                animate opacity { duration: 240ms; easing: ease-out-quad; }
+                animate x { duration: 420ms; easing: ease-out-expo; }
                 // The sections' outline glides to the one chosen.
                 Rectangle {
                     x: (96px * S.k) - (4px * S.k);
@@ -2159,6 +2168,12 @@ export component AppWindow inherits Window {
             close => { root.click(Zone.sort-picker, -1); }
         }
         if root.overlay == 7 && !root.download-consent: DownloadsPage {
+            property <bool> entered: false;
+            init => { self.entered = true; }
+            opacity: self.entered && root.closing != 7 ? 1 : 0;
+            y: self.entered && root.closing != 7 ? 0 : (28px * S.k);
+            animate opacity { duration: 240ms; easing: ease-out-quad; }
+            animate y { duration: 420ms; easing: ease-out-expo; }
             data: root.downloads; sel: root.download-sel; focus-btn: root.download-focus-btn; pad: root.pad-hints;
             tabs: root.download-tabs; filter: root.download-filter; shelf-x: root.download-shelf-x;
             down: root.download-down; up: root.download-up; vpn: root.download-vpn; vpn-kind: root.download-vpn-kind;
@@ -2210,7 +2225,9 @@ export component AppWindow inherits Window {
         if root.overlay == 3: Rectangle {
             property <bool> entered: false;
             init => { entered = true; }
-            opacity: entered ? 1 : 0;
+            // Out the way it came in when Back closes it.
+            property <bool> on: entered && root.closing != 3;
+            opacity: on ? 1 : 0;
             animate opacity { duration: 200ms; easing: ease-out-quad; }
             background: #000000;
             TouchArea { clicked => { root.click(Zone.shots, -1); } }
@@ -2219,7 +2236,7 @@ export component AppWindow inherits Window {
                 height: root.height;
                 source: root.viewer-image;
                 image-fit: contain;
-                transform-scale: entered ? 1 : 1.03;
+                transform-scale: on ? 1 : 1.03;
                 animate transform-scale { duration: 420ms; easing: ease-out-expo; }
             }
             Rectangle { height: (150px * S.k); y: 0; background: @linear-gradient(180deg, #000000b3 0%, #00000000 100%); }
@@ -2284,7 +2301,9 @@ export component AppWindow inherits Window {
         if root.overlay == 5: Rectangle {
             property <bool> entered: false;
             init => { entered = true; }
-            background: entered ? #03050c66 : #03050c00;
+            // Out the way it came in when Back closes it.
+            property <bool> on: entered && root.closing != 5;
+            background: on ? #03050c66 : #03050c00;
             animate background { duration: 200ms; }
             TouchArea { clicked => { root.click(Zone.menu, -1); } }
             menu-card := Rectangle {
@@ -2296,8 +2315,8 @@ export component AppWindow inherits Window {
                 // by the bottom corner, where the Control Center's Power was.
                 y: (anchored ? max((110px * S.k), root.height - (196px * S.k) - self.height)
                     : root.menu-anchor == 2 ? root.height - self.height - (72px * S.k)
-                    : (root.height - self.height) / 2) + (entered ? 0 : (16px * S.k));
-                opacity: entered ? 1 : 0;
+                    : (root.height - self.height) / 2) + (on ? 0 : (16px * S.k));
+                opacity: on ? 1 : 0;
                 animate opacity { duration: 180ms; easing: ease-out-quad; }
                 animate y { duration: 300ms; easing: ease-out-expo; }
                 border-radius: (18px * S.k);
@@ -2359,12 +2378,14 @@ export component AppWindow inherits Window {
             property <bool> entered: false;
             property <int> o: root.running.active ? 2 : 0;
             init => { entered = true; }
-            background: entered ? #03050cb3 : #03050c00;
+            // Out the way it came in when Back closes it.
+            property <bool> on: entered && root.closing != 16;
+            background: on ? #03050cb3 : #03050c00;
             animate background { duration: 200ms; }
             TouchArea { clicked => { root.click(Zone.control-center, -1); } }
             cc-panel := Rectangle {
                 height: (400px * S.k);
-                y: entered ? root.height - self.height : root.height;
+                y: on ? root.height - self.height : root.height;
                 animate y { duration: 320ms; easing: ease-out-expo; }
                 background: #101628f5;
                 border-width: 1px;
@@ -3604,6 +3625,10 @@ export component AppWindow inherits Window {
 
         // ------------------------------------------------------------ KEYBOARD CONTROLS
         if root.overlay == 10: Rectangle {
+            property <bool> entered: false;
+            init => { self.entered = true; }
+            opacity: self.entered && root.closing != 10 ? 1 : 0;
+            animate opacity { duration: 220ms; easing: ease-out-quad; }
             background: #03050ccc;
             TouchArea { clicked => { root.click(Zone.controls, -1); } }
             VerticalLayout {
