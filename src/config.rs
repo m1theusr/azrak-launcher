@@ -52,6 +52,8 @@ pub struct Config {
     /// while the panel is up.
     pub overlay_toasts: bool,
     pub overlay_pause: bool,
+    /// Windows games get controllers through SDL, as XInput ones (src/wine_pads.rs).
+    pub wine_sdl_pads: bool,
 }
 
 impl Default for Config {
@@ -86,6 +88,7 @@ impl Default for Config {
             storage: Vec::new(),
             overlay_toasts: true,
             overlay_pause: false,
+            wine_sdl_pads: true,
         }
     }
 }

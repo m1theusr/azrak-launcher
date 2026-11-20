@@ -45,6 +45,8 @@ pub enum SId {
     AutoUpdate,
     KytyRollback,
     ShadRollback,
+    // Controllers in Windows games (src/wine_pads.rs)
+    WineSdlPads,
     // In-game overlay (src/overlay_ui.rs)
     OverlayHelper,
     OverlayToasts,
@@ -127,6 +129,10 @@ impl App {
         r.value_kind = if connected { 1 } else { 0 };
         r.hint = if connected { "Your controller works in games with no setup" } else { "Games play best with a controller · open to see the keyboard keys" }.into();
         rows.push((SId::Controls, r));
+        let mut r = row(2, "Controller in Windows games");
+        r.on = cfg.wine_sdl_pads;
+        r.hint = "Shows any controller (DualShock, DualSense…) to Windows games as an Xbox one · takes effect at the next start".into();
+        rows.push((SId::WineSdlPads, r));
         rows.push((SId::ThisPc, self.this_pc_row()));
         rows.extend(self.overlay_rows(&cfg));
 
@@ -718,9 +724,10 @@ impl App {
                 self.save_cfg(|c| c.seed_after_download = on);
                 self.push_downloads();
             }
-            SId::Fullscreen | SId::Amd | SId::ReturnOnExit | SId::Sounds | SId::AutoUpdate | SId::OverlayToasts | SId::OverlayPause => {
+            SId::Fullscreen | SId::Amd | SId::ReturnOnExit | SId::Sounds | SId::AutoUpdate | SId::OverlayToasts | SId::OverlayPause | SId::WineSdlPads => {
                 let on = dir > 0;
                 self.save_cfg(|c| match id {
+                    SId::WineSdlPads => c.wine_sdl_pads = on,
                     SId::OverlayToasts => c.overlay_toasts = on,
                     SId::OverlayPause => c.overlay_pause = on,
                     SId::Fullscreen => c.fullscreen = on,
@@ -774,7 +781,7 @@ impl App {
                 ui.set_edit_index(i as i32);
             }
             SId::Fullscreen | SId::Amd | SId::ReturnOnExit | SId::Sounds | SId::AutoUpdate | SId::SeedCompleted | SId::VpnOnly | SId::SoundMute
-                | SId::OverlayToasts | SId::OverlayPause => {
+                | SId::OverlayToasts | SId::OverlayPause | SId::WineSdlPads => {
                 let on = self.settings_rows[i].on;
                 self.settings_change(i, if on { -1 } else { 1 });
             }
