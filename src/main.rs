@@ -26,6 +26,7 @@ mod theme;
 mod toast;
 mod sound;
 mod storage;
+mod folder_pick;
 mod overlay;
 mod overlay_ui;
 mod ipc;

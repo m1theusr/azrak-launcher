@@ -1,4 +1,4 @@
-import { S, Theme, Icons, Zone, DownloadData, DlTab, DlChoice, SetupFile, BootStep, OsiDisk, WjKey, ChipData, ActionData, TileData, HeroData, CardData, CardRow, GenreChip, Fact, FactRow, Shot, HubData, WidgetData, ToastData, NoteRow, SettingData, SettingSection, MenuItem, RunningData } from "theme.slint";
+import { S, Theme, Icons, Zone, DownloadData, DlTab, DlChoice, SetupFile, BootStep, OsiDisk, WjKey, ChipData, ActionData, TileData, HeroData, CardData, CardRow, GenreChip, Fact, FactRow, Shot, HubData, WidgetData, ToastData, NoteRow, PickRow, StorageColors, SettingData, SettingSection, MenuItem, RunningData } from "theme.slint";
 import { FocusRing, Chip, Btn, Kicker, Badge, Switch, KeyCap, KeyboardKey, BackButton, Shimmer, Cover } from "widgets.slint";
 import { DownloadsPage, DownloadConsent, DownloadPanel, Capsule } from "downloads.slint";
 import { LibraryFilter, LibrarySortPicker } from "library.slint";
@@ -371,6 +371,12 @@ export component AppWindow inherits Window {
     in property <int> notif-count;
     in property <string> notif-last;
     in property <[NoteRow]> notes;
+    // The drive and folder picker (src/folder_pick.rs, overlay 18): step 0 the drives, 1 a folder.
+    in property <string> pick-title;
+    in property <string> pick-path;
+    in property <string> pick-note;
+    in property <int> pick-step;
+    in property <[PickRow]> pick-rows;
     callback toast-click(int);
 
     in property <bool> boot-first;
@@ -2011,7 +2017,7 @@ export component AppWindow inherits Window {
                                 visible: shown;
                                 padding-bottom: shown ? (4px * S.k) : 0;
                                 height: shown ? self.preferred-height : 0;
-                                if shown: row := Rectangle {
+                                if shown && s.kind < 5: row := Rectangle {
                                     property <bool> editing: s.kind == 1 && root.edit-index == i;
                                     // What's on the right (a switch, a value, a choice, at least a
                                     // chevron), centred on the row; the words wrap beside it.
@@ -2130,6 +2136,77 @@ export component AppWindow inherits Window {
                                         if s.kind == 1 || s.kind == 4: Image { y: (parent.height - self.height) / 2; source: Icons.chevr; colorize: #9ba6c0; width: (18px * S.k); height: self.width; }
                                     }
                                 }
+                                // A drive, as a console's storage screen: its name and size, a bar in
+                                // parts (games, downloads, media, other), its free space.
+                                if shown && s.kind == 5: Rectangle {
+                                    height: drive-v.preferred-height;
+                                    border-radius: (14px * S.k);
+                                    background: f ? #ffffff1c : ta-drive.has-hover ? #ffffff0d : transparent;
+                                    border-width: (3px * S.k);
+                                    border-color: f ? #f5f7fb : #f5f7fb00;
+                                    animate background, border-color { duration: 170ms; easing: ease-out-quad; }
+                                    ta-drive := TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.settings, i); } }
+                                    drive-v := VerticalLayout {
+                                        padding-left: (24px * S.k); padding-right: (24px * S.k);
+                                        padding-top: (20px * S.k); padding-bottom: (18px * S.k);
+                                        spacing: (12px * S.k);
+                                        HorizontalLayout {
+                                            spacing: (16px * S.k);
+                                            Text { text: s.label; font-size: (22px * S.t); font-weight: 600; color: Theme.text; overflow: elide; horizontal-stretch: 1; vertical-alignment: center; }
+                                            Text { text: s.value; font-size: (17px * S.t); color: s.value-kind == 2 && s.segs.length == 0 ? Theme.danger : #dfe4ef; vertical-alignment: center; }
+                                        }
+                                        bar-bg := Rectangle {
+                                            height: (10px * S.k);
+                                            border-radius: (5px * S.k);
+                                            background: #ffffff1a;
+                                            clip: true;
+                                            HorizontalLayout {
+                                                alignment: start;
+                                                spacing: 0;
+                                                for v[k] in s.segs: Rectangle {
+                                                    width: bar-bg.width * clamp(v, 0, 1);
+                                                    background: StorageColors.parts[k];
+                                                    animate width { duration: 520ms; easing: ease-out-quart; }
+                                                }
+                                            }
+                                        }
+                                        HorizontalLayout {
+                                            spacing: (16px * S.k);
+                                            Text { text: s.hint; font-size: (16px * S.t); color: s.hint-kind == 1 ? Theme.ok : s.hint-kind == 2 ? Theme.danger : #9ba6c0; overflow: elide; horizontal-stretch: 1; }
+                                            Text { text: s.value2; font-size: (16px * S.t); color: s.value-kind == 2 ? Theme.danger : #9ba6c0; }
+                                        }
+                                    }
+                                }
+                                // A line of its legend: the colour, what it is, how much.
+                                if shown && s.kind == 6: Rectangle {
+                                    height: max((62px * S.k), part-v.preferred-height);
+                                    border-radius: (14px * S.k);
+                                    background: f ? #ffffff1c : ta-part.has-hover ? #ffffff0d : transparent;
+                                    border-width: (3px * S.k);
+                                    border-color: f ? #f5f7fb : #f5f7fb00;
+                                    animate background, border-color { duration: 170ms; easing: ease-out-quad; }
+                                    if !f: Rectangle { x: (64px * S.k); y: parent.height - 1px; width: parent.width - (84px * S.k); height: 1px; background: #ffffff10; }
+                                    ta-part := TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.settings, i); } }
+                                    HorizontalLayout {
+                                        padding-left: (28px * S.k); padding-right: (24px * S.k);
+                                        spacing: (18px * S.k);
+                                        Rectangle {
+                                            width: (18px * S.k); height: self.width;
+                                            y: (parent.height - self.height) / 2;
+                                            border-radius: self.width / 2;
+                                            background: StorageColors.parts[max(0, s.dot - 1)];
+                                        }
+                                        part-v := VerticalLayout {
+                                            alignment: center;
+                                            padding-top: (10px * S.k); padding-bottom: (10px * S.k);
+                                            spacing: (3px * S.k);
+                                            horizontal-stretch: 1;
+                                            Text { text: s.label; font-size: (19px * S.t); color: Theme.text; overflow: elide; }
+                                            if s.hint != "": Text { text: s.hint; font-size: (15px * S.t); wrap: word-wrap; color: s.hint-kind == 1 ? Theme.ok : s.hint-kind == 2 ? Theme.danger : #9ba6c0; }
+                                        }
+                                        Text { text: s.value; font-size: (17px * S.t); color: #9ba6c0; vertical-alignment: center; }
+                                    }
+                                }
                             }
                             // About: required attribution for the Slint royalty-free license (section 2a).
                             if root.settings-section == root.settings-sections.length - 1: Rectangle {
@@ -2173,8 +2250,12 @@ export component AppWindow inherits Window {
                     { glyph: root.pad-hints ? "○" : "Esc", label: "Close", tint: #ff8a9a, back: true },
                 ] : (!in-rows && root.settings-section == root.settings-sections.length - 1) ? [
                     { glyph: root.pad-hints ? "○" : "Esc", label: "Back", tint: #ff8a9a, back: true },
+                ] : (in-rows && root.settings[root.idx].removable) ? [
+                    { glyph: root.pad-hints ? "✕" : "Enter", label: "Select", tint: #8dbaff, back: false },
+                    { glyph: root.pad-hints ? "□" : "T", label: "Remove", tint: #f5a9e0, back: false },
+                    { glyph: root.pad-hints ? "○" : "Esc", label: "Back", tint: #ff8a9a, back: true },
                 ] : [
-                    { glyph: root.pad-hints ? "✕" : "Enter", label: !in-rows ? "Open" : root.settings[root.idx].kind == 4 ? "Select" : "Change", tint: #8dbaff, back: false },
+                    { glyph: root.pad-hints ? "✕" : "Enter", label: !in-rows ? "Open" : root.settings[root.idx].kind >= 4 ? "Select" : "Change", tint: #8dbaff, back: false },
                     { glyph: root.pad-hints ? "○" : "Esc", label: root.settings-root ? "Close" : "Back", tint: #ff8a9a, back: true },
                 ]: Rectangle {
                     width: hint-row.preferred-width;
@@ -3806,6 +3887,126 @@ export component AppWindow inherits Window {
                 width: self.preferred-width; height: (26px * S.k);
                 spacing: (22px * S.k);
                 for h in root.pad-hints ? [{ k: "✕", l: "Open" }, { k: "□", l: "Delete" }, { k: "○", l: "Back" }] : [{ k: "Enter", l: "Open" }, { k: "T", l: "Delete" }, { k: "Esc", l: "Back" }]: HorizontalLayout {
+                    spacing: (8px * S.k);
+                    KeyCap { text: h.k; round: root.pad-hints; }
+                    Text { text: h.l; font-size: (16px * S.k); color: Theme.hint; vertical-alignment: center; }
+                }
+            }
+        }
+
+        // ------------------------------------------------------------ DRIVES AND FOLDERS
+        // Choosing where games go with a controller (src/folder_pick.rs): the drives, then the
+        // folders on the one chosen, "Use this folder" first. A page of its own, as a console's.
+        if root.overlay == 18: Rectangle {
+            property <bool> entered: false;
+            init => { entered = true; }
+            property <bool> on: entered && root.closing != 18;
+            opacity: on ? 1 : 0;
+            transform-scale: on ? 1 : 0.985;
+            animate opacity { duration: 260ms; easing: ease-out-quad; }
+            animate transform-scale { duration: 420ms; easing: ease-out-expo; }
+            Wallpaper { kind: root.wallpaper-kind == 0 ? 1 : root.wallpaper-kind; image: root.wallpaper-image; }
+            Rectangle { background: @linear-gradient(180deg, #04060ecc 0%, #04060ee6 40%, #04060ef2 100%); }
+            TouchArea {}
+            HorizontalLayout {
+                x: (96px * S.k); y: (40px * S.k); height: (64px * S.k);
+                spacing: (18px * S.k); alignment: start;
+                Rectangle {
+                    width: (52px * S.k); height: self.width; y: (6px * S.k);
+                    border-radius: self.width / 2;
+                    background: ta-pb.has-hover ? #ffffff2e : #ffffff17;
+                    Image { source: Icons.chevl; colorize: Theme.text; width: (24px * S.k); height: self.width; }
+                    ta-pb := TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.pick, -1); } }
+                }
+                Text { text: root.pick-title; font-size: (36px * S.t); font-weight: 600; color: Theme.text; vertical-alignment: center; }
+            }
+            property <length> w: min((1080px * S.k), root.width - (192px * S.k));
+            // Where it is: the drive › folders, and its room.
+            Text {
+                x: (root.width - parent.w) / 2; y: (128px * S.k);
+                width: parent.w;
+                text: root.pick-step == 0 ? "Games can go on any of these. A drive plugged in but not mounted is mounted when chosen." : root.pick-path;
+                font-size: (18px * S.k); color: Theme.text2; overflow: elide;
+            }
+            if root.pick-note != "": Text {
+                x: (root.width - parent.w) / 2; y: (158px * S.k);
+                width: parent.w;
+                text: root.pick-note;
+                font-size: (17px * S.k); color: Theme.danger; overflow: elide;
+            }
+            Flickable {
+                x: (root.width - parent.w) / 2 - (4px * S.k);
+                y: (196px * S.k);
+                width: parent.w + (8px * S.k);
+                height: root.height - self.y - (90px * S.k);
+                content-y: -max(0px, min(root.idx * (82px * S.k) - self.height / 2, list-p.preferred-height - self.height));
+                animate content-y { duration: 260ms; easing: ease-out-quart; }
+                interactive: false;
+                list-p := VerticalLayout {
+                    width: parent.width;
+                    padding: (4px * S.k);
+                    spacing: (4px * S.k);
+                    for r[i] in root.pick-rows: Rectangle {
+                        property <bool> f: root.zone == Zone.pick && root.idx == i;
+                        property <bool> shown: false;
+                        init => { self.shown = true; }
+                        opacity: self.shown ? 1 : 0;
+                        animate opacity { duration: 220ms; delay: min(i, 10) * 20ms; easing: ease-out-quad; }
+                        height: (78px * S.k);
+                        border-radius: (14px * S.k);
+                        background: f ? #ffffff1c : ta-p.has-hover ? #ffffff0d : transparent;
+                        border-width: (3px * S.k);
+                        border-color: f ? #f5f7fb : #f5f7fb00;
+                        animate background, border-color { duration: 160ms; }
+                        if !f: Rectangle { x: (20px * S.k); y: parent.height - 1px; width: parent.width - (40px * S.k); height: 1px; background: #ffffff14; }
+                        HorizontalLayout {
+                            padding-left: (22px * S.k); padding-right: (22px * S.k);
+                            spacing: (18px * S.k);
+                            Rectangle {
+                                width: (46px * S.k); height: self.width; y: (16px * S.k);
+                                border-radius: r.kind == 0 ? (12px * S.k) : self.width / 2;
+                                background: r.kind == 1 ? (r.warn ? Theme.danger.with-alpha(0.22) : Theme.accent.with-alpha(0.3)) : #ffffff14;
+                                Image {
+                                    source: Icons.get(r.icon);
+                                    colorize: r.kind == 1 ? (r.warn ? Theme.danger : Theme.accent.brighter(0.4)) : r.kind == 2 ? #f2c46d : Theme.text;
+                                    width: (22px * S.k); height: self.width;
+                                }
+                            }
+                            VerticalLayout {
+                                alignment: center; spacing: (2px * S.k); horizontal-stretch: 1;
+                                Text { text: r.label; font-size: (20px * S.k); font-weight: r.kind == 1 ? 600 : 500; color: Theme.text; overflow: elide; }
+                                if r.sub != "": Text { text: r.sub; font-size: (16px * S.k); color: r.warn && r.kind == 1 ? Theme.danger : Theme.text2; overflow: elide; }
+                            }
+                            if r.has-bar: Rectangle {
+                                width: (200px * S.k); height: (8px * S.k);
+                                y: (parent.height - self.height) / 2;
+                                border-radius: (4px * S.k);
+                                background: #ffffff1f;
+                                Rectangle {
+                                    x: 0; width: parent.width * clamp(r.bar, 0, 1); height: parent.height;
+                                    border-radius: parent.border-radius;
+                                    background: r.warn ? Theme.warn : StorageColors.parts[0];
+                                }
+                            }
+                            if r.kind != 1: Image { y: (parent.height - self.height) / 2; source: Icons.chevr; colorize: #9ba6c0; width: (18px * S.k); height: self.width; }
+                        }
+                        ta-p := TouchArea { mouse-cursor: pointer; clicked => { root.click(Zone.pick, i); } }
+                    }
+                    if root.pick-step == 1 && root.pick-rows.length == 1: Text {
+                        height: (60px * S.k);
+                        x: (22px * S.k);
+                        text: "No folders in here";
+                        font-size: (17px * S.k); color: Theme.hint; vertical-alignment: center;
+                    }
+                }
+            }
+            HorizontalLayout {
+                x: root.width - self.width - (96px * S.k); y: root.height - (60px * S.k);
+                width: self.preferred-width; height: (26px * S.k);
+                spacing: (22px * S.k);
+                for h in root.pick-step == 0
+                    ? (root.pad-hints ? [{ k: "✕", l: "Open" }, { k: "○", l: "Back" }] : [{ k: "Enter", l: "Open" }, { k: "Esc", l: "Back" }])
+                    : (root.pad-hints ? [{ k: "✕", l: "Open" }, { k: "△", l: "Use this folder" }, { k: "○", l: "Up" }] : [{ k: "Enter", l: "Open" }, { k: "/", l: "Use this folder" }, { k: "Esc", l: "Up" }]): HorizontalLayout {
                     spacing: (8px * S.k);
                     KeyCap { text: h.k; round: root.pad-hints; }
                     Text { text: h.l; font-size: (16px * S.k); color: Theme.hint; vertical-alignment: center; }

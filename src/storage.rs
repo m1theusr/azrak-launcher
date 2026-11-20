@@ -3,12 +3,74 @@
 //!
 //! A place added by its folder P keeps SwarmPlay's things in P/SwarmPlay/Downloads and
 //! P/SwarmPlay/Games (the latter is also a game folder, so what's installed there is found).
+//!
+//! As on a console, each drive shows its size, a bar split by what fills it (games, downloads,
+//! screenshots, everything else) and its free space; the sizes are counted in the background
+//! when Storage is opened (at most once a minute).
 
 use crate::app::*;
 use crate::settings::SId;
 use crate::{util, SettingData};
+use std::collections::HashMap;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
+
+/// What fills a drive, counted: games, downloads, screenshots (bytes on the disk).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Usage {
+    pub games: u64,
+    pub downloads: u64,
+    pub media: u64,
+}
+
+/// The last count (when, and per drive), and whether one is under way.
+static USAGE: Mutex<Option<(f64, HashMap<u64, Usage>)>> = Mutex::new(None);
+static COUNTING: AtomicBool = AtomicBool::new(false);
+const RECOUNT_SECS: f64 = 60.0;
+
+/// The legend under a drive's bar: its colour (in the bar too), as a console's.
+pub const PARTS: [&str; 4] = ["Games", "Downloads", "Media gallery", "Other"];
+
+/// Bytes `path` takes on the disk, not crossing into other drives nor following links.
+pub fn du(path: &Path) -> u64 {
+    let Ok(top) = std::fs::symlink_metadata(path) else { return 0 };
+    let dev = top.dev();
+    let mut total = 0u64;
+    let mut todo = vec![path.to_path_buf()];
+    while let Some(dir) = todo.pop() {
+        let Ok(meta) = std::fs::symlink_metadata(&dir) else { continue };
+        if meta.dev() != dev { continue; }
+        total += meta.blocks() * 512;
+        if !meta.is_dir() { continue; }
+        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+        for e in entries.flatten() {
+            let Ok(ft) = e.file_type() else { continue };
+            if ft.is_dir() { todo.push(e.path()); }
+            else if let Ok(m) = e.metadata() { if m.dev() == dev { total += m.blocks() * 512; } }
+        }
+    }
+    total
+}
+
+/// The paths with none of their parents also there (nothing counted twice).
+fn outermost(mut paths: Vec<PathBuf>) -> Vec<PathBuf> {
+    paths.sort();
+    paths.dedup();
+    let all = paths.clone();
+    paths.retain(|p| !all.iter().any(|q| q != p && p.starts_with(q)));
+    paths
+}
+
+/// Where screenshots go (src/overlay_ui.rs).
+pub fn media_dir() -> PathBuf {
+    std::env::var_os("XDG_PICTURES_DIR").map(PathBuf::from).unwrap_or_else(|| util::expand_home("~/Pictures")).join("SwarmPlay")
+}
+
+fn dev_of(path: &Path) -> u64 {
+    existing(path).and_then(|p| std::fs::metadata(p).ok()).map(|m| m.dev()).unwrap_or(0)
+}
 
 /// One place: where its downloads and installs go, and how much room its drive has.
 #[derive(Clone, Debug, PartialEq)]
@@ -19,7 +81,9 @@ pub struct Place {
     pub free: u64,
     pub total: u64,
     pub default: bool,
-    dev: u64,
+    /// Added in Storage (not the built-in place): it can be taken off the list.
+    pub added: Option<String>,
+    pub dev: u64,
 }
 
 /// The nearest folder of `path` that exists.
@@ -60,62 +124,176 @@ fn under(folder: &str) -> (String, String) {
     (base.join("Downloads").to_string_lossy().into_owned(), base.join("Games").to_string_lossy().into_owned())
 }
 
-fn gb(bytes: u64) -> String {
-    let g = bytes as f64 / (1u64 << 30) as f64;
-    if g >= 1024.0 { format!("{:.1} TB", g / 1024.0) } else { format!("{g:.0} GB") }
+/// A size as a console writes it: 0 kB, 512 MB, 2.02 GB, 260.5 GB, 1.2 TB.
+pub fn size(bytes: u64) -> String {
+    let k = bytes as f64 / 1024.0;
+    let (m, g) = (k / 1024.0, k / 1024.0 / 1024.0);
+    if g >= 1024.0 { format!("{:.1} TB", g / 1024.0) }
+    else if g >= 100.0 { format!("{g:.1} GB") }
+    else if g >= 1.0 { format!("{g:.2} GB") }
+    else if m >= 1.0 { format!("{m:.0} MB") }
+    else { format!("{k:.0} kB") }
+}
+
+/// The bar's parts, as shares of the whole drive: games, downloads, media, other (what's used
+/// but none of those).
+pub fn shares(u: &Usage, free: u64, total: u64) -> [f32; 4] {
+    if total == 0 { return [0.0; 4]; }
+    let used = total.saturating_sub(free);
+    let ours = (u.games + u.downloads + u.media).min(used);
+    let other = used - ours;
+    let f = |b: u64| (b as f64 / total as f64) as f32;
+    [f(u.games.min(used)), f(u.downloads.min(used.saturating_sub(u.games))), f(u.media.min(used.saturating_sub(u.games + u.downloads))), f(other)]
 }
 
 impl App {
     /// Every place, the one new games go to first; one per drive.
     pub fn storage_places(&self) -> Vec<Place> {
         let cfg = self.cfg.lock().unwrap().clone();
-        let mut pairs = vec![(cfg.download_dir.clone(), cfg.install_dir.clone())];
-        pairs.push(("~/Downloads/Azrak".into(), "~/Games/Azrak".into()));
-        pairs.extend(cfg.storage.iter().map(|f| under(f)));
+        let mut pairs = vec![(cfg.download_dir.clone(), cfg.install_dir.clone(), None)];
+        pairs.push(("~/Downloads/Azrak".into(), "~/Games/Azrak".into(), None));
+        pairs.extend(cfg.storage.iter().map(|f| { let (d, i) = under(f); (d, i, Some(f.clone())) }));
         let mut places: Vec<Place> = Vec::new();
-        for (download, install) in pairs {
+        for (download, install, added) in pairs {
             let path = util::expand_home(&install);
-            let dev = existing(&path).and_then(|p| std::fs::metadata(p).ok()).map(|m| m.dev()).unwrap_or(0);
-            if places.iter().any(|p| p.dev == dev) { continue; }
+            let dev = dev_of(&path);
+            if let Some(p) = places.iter_mut().find(|p| p.dev == dev) {
+                // The one new games go to stands for its drive; an added folder on it can still go.
+                if p.added.is_none() && added.is_some() && !p.default { p.added = added; }
+                continue;
+            }
             let (free, total) = space(&path).unwrap_or((0, 0));
             let default = install == cfg.install_dir;
-            places.push(Place { name: drive_name(&mount_point(&path)), download, install, free, total, default, dev });
+            let added = added.filter(|_| !default);
+            places.push(Place { name: drive_name(&mount_point(&path)), download, install, free, total, default, added, dev });
         }
         places
+    }
+
+    /// Count what fills each drive, in the background, if the last count is old.
+    fn storage_count(&self, places: &[Place]) {
+        let fresh = USAGE.lock().unwrap().as_ref().is_some_and(|(at, _)| util::now_secs() - at < RECOUNT_SECS);
+        if fresh || COUNTING.swap(true, Ordering::SeqCst) { return; }
+        let cfg = self.cfg.lock().unwrap().clone();
+        let games: Vec<PathBuf> = self.locals.iter().map(|l| l.l.path.clone()).collect();
+        let mut downloads: Vec<PathBuf> = places.iter().map(|p| util::expand_home(&p.download)).collect();
+        downloads.push(util::expand_home(&cfg.download_dir));
+        std::thread::Builder::new().name("storage-count".into()).spawn(move || {
+            let mut by: HashMap<u64, Usage> = HashMap::new();
+            for g in outermost(games) { let d = dev_of(&g); by.entry(d).or_default().games += du(&g); }
+            for d in outermost(downloads) { let dev = dev_of(&d); by.entry(dev).or_default().downloads += du(&d); }
+            let m = media_dir();
+            by.entry(dev_of(&m)).or_default().media += du(&m);
+            *USAGE.lock().unwrap() = Some((util::now_secs(), by));
+            COUNTING.store(false, Ordering::SeqCst);
+            let _ = slint::invoke_from_event_loop(|| crate::app::with_app(|app| {
+                if app.overlay == Overlay::Settings { app.refresh_settings(); }
+            }));
+        }).ok();
+    }
+
+    /// Something was added or removed: the next look counts again.
+    pub fn storage_recount() {
+        if let Some((at, _)) = USAGE.lock().unwrap().as_mut() { *at = 0.0; }
     }
 
     pub fn storage_rows(&self) -> (Vec<(SId, SettingData)>, Vec<Place>) {
         let cfg = self.cfg.lock().unwrap().clone();
         let row = |kind: i32, label: &str| SettingData { kind, label: label.into(), ..Default::default() };
         let places = self.storage_places();
+        if self.overlay == Overlay::Settings { self.storage_count(&places); }
+        let usage = USAGE.lock().unwrap().as_ref().map(|(_, m)| m.clone());
         let mut rows = Vec::new();
         for (i, p) in places.iter().enumerate() {
-            let games = self.locals.iter().filter(|l| existing(&l.l.path).and_then(|d| std::fs::metadata(d).ok()).is_some_and(|m| m.dev() == p.dev)).count();
-            let mut r = row(4, &p.name);
-            r.value = if p.total > 0 { format!("{} free of {}", gb(p.free), gb(p.total)).into() } else { "Not connected".into() };
-            r.value_kind = if p.total > 0 && p.free < 50 << 30 { 2 } else { 0 };
-            r.has_bar = p.total > 0;
-            r.bar = if p.total > 0 { 1.0 - p.free as f32 / p.total as f32 } else { 0.0 };
-            let what = if games == 1 { "1 game".to_string() } else { format!("{games} games") };
-            (r.hint, r.hint_kind) = if p.default {
-                (format!("New games go here · {what} · {}", util::display_path(&p.install)).into(), 1)
+            // The drive: its name, its size, the bar, its free space.
+            let mut r = row(5, &p.name);
+            let u = usage.as_ref().map(|m| m.get(&p.dev).copied().unwrap_or_default());
+            if p.total > 0 {
+                r.value = format!("Size: {}", size(p.total)).into();
+                r.value2 = format!("Free space: {}", size(p.free)).into();
+                r.value_kind = if p.free < 50 << 30 { 2 } else { 0 };
+                let sh = match &u {
+                    Some(u) => shares(u, p.free, p.total),
+                    // Not counted yet: all of it "other" for now.
+                    None => [0.0, 0.0, 0.0, 1.0 - p.free as f32 / p.total as f32],
+                };
+                r.segs = crate::app::model(sh.to_vec());
             } else {
-                (format!("{what} · press to put new games here · {}", util::display_path(&p.install)).into(), 0)
+                r.value = "Not connected".into();
+                r.value_kind = 2;
+            }
+            (r.hint, r.hint_kind) = if p.default {
+                (format!("New games go here · {}", util::display_path(&p.install)).into(), 1)
+            } else {
+                (format!("Press to put new games here · {}", util::display_path(&p.install)).into(), 0)
             };
+            r.removable = p.added.is_some();
             rows.push((SId::StoragePlace(i as u16), r));
+            if p.total == 0 { continue; }
+            // What fills it, each with its colour.
+            let used = p.total.saturating_sub(p.free);
+            for (k, part) in PARTS.iter().enumerate() {
+                let mut r = row(6, part);
+                r.dot = k as i32 + 1;
+                r.value = match &u {
+                    None => "Counting…".into(),
+                    Some(u) => size(match k { 0 => u.games, 1 => u.downloads, 2 => u.media, _ => used.saturating_sub(u.games + u.downloads + u.media) }).into(),
+                };
+                rows.push((SId::StoragePart(i as u16, k as u8), r));
+            }
         }
-        let mut r = row(1, "Add a place");
-        r.hint = "A folder on another drive (an SSD, a USB drive): games can download and install there".into();
+        let mut r = row(4, "Add a place");
+        r.hint = "Another drive (an SSD, a USB drive) or a folder on one: games can download and install there".into();
         rows.push((SId::StorageAdd, r));
-        let mut r = row(1, "Install new games to");
+        let mut r = row(4, "Install new games to");
         r.value = util::display_path(&cfg.install_dir).into();
         r.hint = "Downloaded games are set up here when you press Install".into();
         rows.push((SId::InstallDir, r));
-        let mut r = row(1, "Save downloads to");
+        let mut r = row(4, "Save downloads to");
         r.value = util::display_path(&cfg.download_dir).into();
         r.hint = "Each download gets its own folder".into();
         rows.push((SId::DownloadDir, r));
         (rows, places)
+    }
+
+    /// A line of the legend pressed: where those things are.
+    pub fn storage_part(&mut self, place: usize, part: usize) {
+        let id = SId::StoragePart(place as u16, part as u8);
+        match part {
+            0 => {
+                crate::audio::play(crate::audio::Sound::Select);
+                while self.overlay != Overlay::None { let before = self.overlay; self.back(); if self.overlay == before { break; } }
+                self.switch_view(1, true);
+            }
+            1 => self.open_downloads(None),
+            2 => {
+                let dir = media_dir();
+                if dir.is_dir() {
+                    crate::audio::play(crate::audio::Sound::Select);
+                    let _ = std::process::Command::new("xdg-open").arg(&dir).spawn();
+                } else {
+                    self.note_setting(id, "No screenshots yet · Share takes one in a game", 0);
+                }
+            }
+            _ => self.note_setting(id, "Everything else on this drive: the system, apps, your own files", 0),
+        }
+    }
+
+    /// □ on a place that was added: off the list (nothing on it is deleted).
+    pub fn storage_remove(&mut self, i: usize) {
+        let Some(place) = self.storage_places().get(i).cloned() else { return };
+        let Some(folder) = place.added else {
+            return self.note_setting(SId::StoragePlace(i as u16), "This one stays: it's where SwarmPlay started", 0);
+        };
+        {
+            let mut c = self.cfg.lock().unwrap();
+            c.storage.retain(|f| *f != folder);
+            c.save();
+        }
+        crate::audio::play(crate::audio::Sound::Back);
+        self.toast("Taken off the list", &format!("{} · its games and downloads are still there", place.name), "disk", crate::toast::DONE);
+        Self::storage_recount();
+        self.refresh_settings();
     }
 
     /// Press on a place: new games go there from now on.
@@ -160,6 +338,7 @@ impl App {
             c.save();
         }
         self.note_setting(SId::StorageAdd, "Added · press it in the list to put new games there", 1);
+        Self::storage_recount();
         self.refresh_settings();
     }
 }
@@ -174,5 +353,40 @@ mod tests {
         assert_eq!(drive_name("/var/home"), "Internal storage");
         assert_eq!(drive_name("/run/media/m/Games SSD"), "Games SSD");
         assert_eq!(under("/run/media/m/SSD/"), ("/run/media/m/SSD/SwarmPlay/Downloads".into(), "/run/media/m/SSD/SwarmPlay/Games".into()));
+    }
+
+    #[test]
+    fn sizes_read_as_on_a_console() {
+        assert_eq!(size(0), "0 kB");
+        assert_eq!(size(512 << 20), "512 MB");
+        assert_eq!(size((2.02 * (1u64 << 30) as f64) as u64), "2.02 GB");
+        assert_eq!(size((260.5 * (1u64 << 30) as f64) as u64), "260.5 GB");
+    }
+
+    #[test]
+    fn the_bar_splits_what_is_used() {
+        let g = 1u64 << 30;
+        let u = Usage { games: 30 * g, downloads: 10 * g, media: 0 };
+        let s = shares(&u, 40 * g, 100 * g);
+        assert_eq!(s, [0.3, 0.1, 0.0, 0.2]);
+        // Counted more than is used (a drive filled since): never past the used part.
+        let s = shares(&Usage { games: 90 * g, downloads: 0, media: 0 }, 40 * g, 100 * g);
+        assert_eq!(s[0], 0.6);
+        assert_eq!(s[3], 0.0);
+    }
+
+    #[test]
+    fn counts_nothing_twice() {
+        let p = |s: &str| PathBuf::from(s);
+        assert_eq!(outermost(vec![p("/a/b"), p("/a"), p("/c"), p("/a/b/c")]), vec![p("/a"), p("/c")]);
+    }
+
+    #[test]
+    fn du_counts_a_folder() {
+        let dir = std::env::temp_dir().join(format!("swarmplay-du-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("sub")).unwrap();
+        std::fs::write(dir.join("sub/f"), vec![1u8; 100_000]).unwrap();
+        assert!(du(&dir) >= 100_000);
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }
