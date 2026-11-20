@@ -48,9 +48,11 @@ STEPS = [
     ("09-settings", ["Escape", "Escape", "Escape", "sleep:0.5", "s", "sleep:0.8"]),   # the first page: sections
     ("09b-settings-games", ["Return", "sleep:0.6"]),                                 # a section's page
     ("09b2-notification", ["Down", "Down", "Down", "Return", "sleep:0.9"]),          # Rescan: a notification
-    ("09c-settings-theme", ["Escape", "Down", "Down", "Down", "Down", "Return", "Right", "sleep:0.8"]),  # Wallpaper: Deep blue
+    ("09c-settings-theme", ["Escape"] + ["Down"] * 6 + ["Return", "Right", "sleep:0.8"]),  # Wallpaper: Deep blue
     ("09d-settings-themed", ["Escape", "sleep:0.6"]),                                # back on the first page, themed
-    ("10-settings-bottom", ["Down"] * 12 + ["sleep:0.8"]),                           # Quit, at the end
+    ("09e-settings-sound", ["Up", "Up", "Up", "Return", "sleep:0.8"]),               # Sound: volume, mute, output
+    ("09f-settings-storage", ["Escape", "sleep:0.5", "Up", "Up", "Return", "sleep:0.8"]),  # Storage: the places and their room
+    ("10-settings-bottom", ["Escape", "sleep:0.6"] + ["Down"] * 12 + ["sleep:0.8"]), # Quit, at the end
     ("11-toasts", ["Escape", "sleep:0.5", "Home", "Down", "Right", "Right", "Right", "Return", "sleep:0.4",
                    "Up", "Right", "Right", "Down", "Return", "sleep:0.8"]),
     ("12-power", ["Escape", "Escape", "F1", "sleep:0.7", "Down", "Right", "Right", "Right", "Return", "sleep:0.6"]),  # Control Center → Power
@@ -82,6 +84,17 @@ def shoot(size: str, n: int, out: Path, binary: Path, game: Path | None):
     for tool in ("xdg-open", "mpv", "vlc", "ffplay", "firefox"):
         (stubs / tool).write_text("#!/bin/sh\nexit 0\n")
         (stubs / tool).chmod(0o755)
+    # A stand-in sound server for Settings → Sound (the box has none): 62%, not muted, two outputs.
+    (stubs / "pactl").write_text("""#!/bin/sh
+case "$*" in
+  "get-sink-volume @DEFAULT_SINK@") echo "Volume: front-left: 40632 /  62% / -12.4 dB,   front-right: 40632 /  62% / -12.4 dB" ;;
+  "get-sink-mute @DEFAULT_SINK@") echo "Mute: no" ;;
+  "get-default-sink") echo "alsa_output.speakers" ;;
+  "-f json list sinks") echo '[{"name":"alsa_output.speakers","description":"Built-in Audio Analog Stereo","active_port":"analog-output-speaker"},{"name":"alsa_output.hdmi","description":"HDMI","active_port":"hdmi-output-0"}]' ;;
+esac
+exit 0
+""")
+    (stubs / "pactl").chmod(0o755)
     env = {**os.environ, "DISPLAY": disp, "HOME": str(home), "PATH": f"{stubs}:{os.environ['PATH']}",
            "AZRAK_PRETEND_VERSION": "1.3.0", "SWARMPLAY_BOOT_HOLD_MS": "6000"}
     for k in ("XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME"):

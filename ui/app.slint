@@ -688,7 +688,7 @@ export component AppWindow inherits Window {
                                 border-radius: self.width / 2;
                                 background: #ffffff1a;
                                 Image {
-                                    source: wd.icon == 0 ? Icons.gamepad : wd.icon == 1 ? Icons.folder : wd.icon == 2 ? Icons.disk
+                                    source: wd.icon == 0 ? Icons.gamepad : wd.icon == 1 ? Icons.disk : wd.icon == 2 ? Icons.download
                                         : wd.icon == 3 ? Icons.sparkle : wd.icon == 4 ? Icons.grid : Icons.gear;
                                     colorize: Theme.text;
                                     width: (22px * S.k); height: self.width;
@@ -1236,7 +1236,7 @@ export component AppWindow inherits Window {
                                 }
                                 if root.ring-kind == 0: Image {
                                     y: (parent.height - self.height) / 2;
-                                    source: Icons.disk; colorize: dl.f ? #0a0d18 : Theme.text2;
+                                    source: Icons.download; colorize: dl.f ? #0a0d18 : Theme.text2;
                                     width: (28px * S.k); height: self.width;
                                 }
                             }
@@ -1803,35 +1803,55 @@ export component AppWindow inherits Window {
             Rectangle { background: @linear-gradient(180deg, #04060ecc 0%, #04060ee6 40%, #04060ef2 100%); }
             TouchArea {}
 
-            // Title: Settings, or the section's name with a way back to the first page.
+            // Title: "Settings" on the first page; on a section's page its name with a way back.
+            // The two cross as the pages do.
             HorizontalLayout {
-                x: (96px * S.k); y: (40px * S.k);
+                x: (96px * S.k) - (root.settings-root ? 0 : (40px * S.k)); y: (40px * S.k);
                 height: (64px * S.k);
                 spacing: (18px * S.k);
                 alignment: start;
-                if !root.settings-root: Rectangle {
+                opacity: root.settings-root ? 1 : 0;
+                visible: self.opacity > 0.01;
+                animate opacity { duration: 220ms; easing: ease-out-quad; }
+                animate x { duration: 420ms; easing: ease-out-expo; }
+                Image { source: Icons.gear; colorize: Theme.text; width: (36px * S.k); height: self.width; y: (14px * S.k); }
+                Text { text: "Settings"; font-size: (36px * S.t); font-weight: 600; color: Theme.text; vertical-alignment: center; }
+            }
+            HorizontalLayout {
+                x: (96px * S.k) + (root.settings-root ? (40px * S.k) : 0); y: (40px * S.k);
+                height: (64px * S.k);
+                spacing: (18px * S.k);
+                alignment: start;
+                opacity: root.settings-root ? 0 : 1;
+                visible: self.opacity > 0.01;
+                animate opacity { duration: 220ms; easing: ease-out-quad; }
+                animate x { duration: 420ms; easing: ease-out-expo; }
+                Rectangle {
                     width: (52px * S.k); height: self.width; y: (6px * S.k);
                     border-radius: self.width / 2;
                     background: ta-sback.has-hover ? #ffffff2e : #ffffff14;
                     Image { source: Icons.chevl; colorize: Theme.text; width: (26px * S.k); height: self.width; }
                     ta-sback := TouchArea { mouse-cursor: pointer; clicked => { root.settings-back(); } }
                 }
-                if root.settings-root: Image { source: Icons.gear; colorize: Theme.text; width: (36px * S.k); height: self.width; y: (14px * S.k); }
-                Text { text: root.settings-root ? "Settings" : root.settings-title; font-size: (36px * S.t); font-weight: 600; color: Theme.text; vertical-alignment: center; }
+                Text { text: root.settings-title; font-size: (36px * S.t); font-weight: 600; color: Theme.text; vertical-alignment: center; }
             }
 
             // ---- First page: the sections, one list.
-            if root.settings-root: Rectangle {
-                property <bool> shown: false;
-                init => { self.shown = true; }
+            // Always there: it slides away to the left as a section's page comes in, and back.
+            Rectangle {
+                property <bool> came: false;
+                init => { self.came = true; }
+                property <bool> shown: self.came && root.settings-root;
                 property <length> w: min((1080px * S.k), root.width - (192px * S.k));
-                x: (root.width - self.w) / 2;
-                y: (140px * S.k) + (self.shown ? 0 : (24px * S.k));
+                x: (root.width - self.w) / 2 - (root.settings-root ? 0 : (90px * S.k));
+                y: (140px * S.k) + (self.came ? 0 : (24px * S.k));
                 width: self.w;
                 height: root.height - (140px * S.k) - (90px * S.k);
                 opacity: self.shown ? 1 : 0;
+                visible: self.opacity > 0.01;
+                animate x { duration: 440ms; easing: ease-out-expo; }
                 animate y { duration: 420ms; easing: ease-out-expo; }
-                animate opacity { duration: 260ms; easing: ease-out-quad; }
+                animate opacity { duration: 240ms; easing: ease-out-quad; }
                 // One outline that glides to the row chosen (a section, or Quit under them).
                 Rectangle {
                     property <int> n: root.settings-sections.length;
@@ -1845,7 +1865,7 @@ export component AppWindow inherits Window {
                     background: self.danger ? #ff5a6a33 : #ffffff1c;
                     border-width: (3px * S.k);
                     border-color: self.danger ? #ff8a9a : #f5f7fb;
-                    opacity: root.zone == Zone.settings-nav ? 1 : 0;
+                    opacity: root.zone == Zone.settings-nav && root.settings-root ? 1 : 0;
                     animate y, height { duration: 200ms; easing: ease-out-quart; }
                     animate background, border-color { duration: 160ms; }
                 }
@@ -1909,14 +1929,14 @@ export component AppWindow inherits Window {
             }
 
             // ---- A section's page: the sections on the left, its rows on the right.
-            if !root.settings-root: Rectangle {
-                property <bool> shown: false;
-                init => { self.shown = true; }
-                // A section's page slides in from the right; the first page rises back.
+            // Always there: a section's page slides in from the right as the first page goes.
+            Rectangle {
+                property <bool> shown: !root.settings-root;
                 opacity: self.shown ? 1 : 0;
-                x: self.shown ? 0 : (56px * S.k);
-                animate opacity { duration: 240ms; easing: ease-out-quad; }
-                animate x { duration: 420ms; easing: ease-out-expo; }
+                visible: self.opacity > 0.01;
+                x: self.shown ? 0 : (90px * S.k);
+                animate opacity { duration: 260ms; easing: ease-out-quad; }
+                animate x { duration: 440ms; easing: ease-out-expo; }
                 // The sections' outline glides to the one chosen.
                 Rectangle {
                     x: (96px * S.k) - (4px * S.k);
@@ -1926,7 +1946,7 @@ export component AppWindow inherits Window {
                     background: #ffffff1c;
                     border-width: (3px * S.k);
                     border-color: #f5f7fb;
-                    opacity: root.zone == Zone.settings-nav ? 1 : 0;
+                    opacity: root.zone == Zone.settings-nav && !root.settings-root ? 1 : 0;
                     animate y { duration: 190ms; easing: ease-out-quart; }
                     animate opacity { duration: 140ms; }
                 }
@@ -2053,6 +2073,19 @@ export component AppWindow inherits Window {
                                         spacing: (10px * S.k);
                                         alignment: end;
                                         if s.kind == 2: Switch { on: s.on; }
+                                        // A level (Volume): the bar, then the ‹ value ›.
+                                        if s.has-bar: Rectangle {
+                                            width: (240px * S.k); height: (8px * S.k);
+                                            y: (parent.height - self.height) / 2;
+                                            border-radius: (4px * S.k);
+                                            background: #ffffff1f;
+                                            Rectangle {
+                                                x: 0; width: parent.width * clamp(s.bar, 0, 1); height: parent.height;
+                                                border-radius: parent.border-radius;
+                                                background: Theme.accent.brighter(0.2);
+                                                animate width { duration: 160ms; easing: ease-out-quad; }
+                                            }
+                                        }
                                         if s.kind == 3: Image { y: (parent.height - self.height) / 2; source: Icons.chevl; colorize: f ? Theme.text : Theme.text3; width: (22px * S.k); height: (22px * S.k); }
                                         if s.kind == 3: Text { text: s.value; font-size: (19px * S.t); color: Theme.text; vertical-alignment: center; }
                                         if s.kind == 3: Image { y: (parent.height - self.height) / 2; source: Icons.chevr; colorize: f ? Theme.text : Theme.text3; width: (22px * S.k); height: (22px * S.k); }
@@ -2943,7 +2976,7 @@ export component AppWindow inherits Window {
                                 padding-left: (24px * S.k);
                                 padding-right: (24px * S.k);
                                 spacing: (18px * S.k);
-                                Image { source: Icons.disk; colorize: f ? Theme.text : Theme.text2; width: (30px * S.k); height: self.width; y: (27px * S.k); }
+                                Image { source: Icons.download; colorize: f ? Theme.text : Theme.text2; width: (30px * S.k); height: self.width; y: (27px * S.k); }
                                 VerticalLayout {
                                     alignment: center;
                                     spacing: (4px * S.k);

@@ -167,11 +167,7 @@ impl App {
             }
         }
         let s = &self.sys;
-        if !s.outputs.is_empty() {
-            let mut r = row(3, "Sound output");
-            r.value = s.output.and_then(|i| s.outputs.get(i)).map(|o| o.label.clone()).unwrap_or_else(|| "Choose".into()).into();
-            rows.push((SId::SoundOutput, r));
-        }
+        // (The sound output is in Settings → Sound, src/sound.rs.)
 
         if let Some(u) = &s.update {
             let mut r = row(4, "System");

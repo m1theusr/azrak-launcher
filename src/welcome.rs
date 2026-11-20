@@ -129,18 +129,23 @@ impl App {
         widget(Icons::Grid, "Your games", &value, &sub, -1.0, 0)
     }
 
+    /// SwarmPlay's own update first (what needs you), then the emulators.
     fn emulators_widget(&self) -> WidgetData {
+        if let Some(v) = &self.upd.installed {
+            return widget(Icons::Gear, "Updates", "Restart to update", &format!("SwarmPlay {v} is ready"), -1.0, WARN);
+        }
+        if self.app_update_available() {
+            let v = self.upd.latest.as_ref().map(|r| r.version.clone()).unwrap_or_default();
+            return widget(Icons::Gear, "Updates", &format!("SwarmPlay {v}"), "Out now · press to get it", -1.0, WARN);
+        }
         let (kyty, shad) = (crate::kyty::load_state(), crate::shad::load_state());
         let kyty_v = crate::kyty::pretty(&kyty.installed);
         let kyty_v = kyty_v.split(" · ").next().unwrap_or_default();
         let shad_v = crate::shad::pretty(&shad.installed);
-        let parts: Vec<String> = [("KytyPS5", kyty_v), ("shadPS4", shad_v.as_str())].iter()
+        let parts: Vec<String> = [("SwarmPlay", crate::update::current_version()), ("KytyPS5", kyty_v.to_string()), ("shadPS4", shad_v)].iter()
             .filter(|(_, v)| !v.is_empty()).map(|(n, v)| format!("{n} {v}")).collect();
-        if parts.is_empty() {
-            return widget(Icons::Gear, "Emulators", "Not installed yet", "They install with the first game that needs one", -1.0, 0);
-        }
         let (value, kind) = if self.updates_need_you() { ("Update ready", WARN) } else { ("Up to date", GOOD) };
-        widget(Icons::Gear, "Emulators", value, &parts.join(" · "), -1.0, kind)
+        widget(Icons::Gear, "Updates", value, &parts.join(" · "), -1.0, kind)
     }
 
     pub fn act_welcome(&mut self, a: Act) {
@@ -157,6 +162,8 @@ impl App {
                 "news" => self.switch_view(1, true),
                 // The games are the tiles beside it.
                 "games" if self.row.len() > 1 => { audio::play(Sound::Move); self.set_focus(Z_ROW, 0); self.select_tile(1); }
+                // Straight to SwarmPlay's update.
+                "emulators" => self.open_setting(crate::settings::SId::AppUpdate),
                 _ => self.open_settings(),
             },
             _ => {}

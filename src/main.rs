@@ -24,6 +24,8 @@ mod control_center;
 mod welcome;
 mod theme;
 mod toast;
+mod sound;
+mod storage;
 mod pfs;
 mod rar;
 mod package;
