@@ -47,15 +47,17 @@ STEPS = [
     ("08b-menu-beside", ["Escape", "Down", "Right", "Return", "sleep:0.6"]),           # from the ··· button: beside it
     ("09-settings", ["Escape", "Escape", "Escape", "sleep:0.5", "s", "sleep:0.8"]),   # the first page: sections
     ("09b-settings-games", ["Return", "sleep:0.6"]),                                 # a section's page
-    ("09b2-notification", ["Down", "Down", "Down", "Return", "sleep:0.9"]),          # Rescan: a notification
-    ("09c-settings-theme", ["Escape"] + ["Down"] * 6 + ["Return", "Right", "sleep:0.8"]),  # Wallpaper: Deep blue
+    ("09b2-notification", ["Down", "Down", "Down", "Return", "sleep:0.4", "Return", "sleep:0.9"]),  # Rescan twice: the second takes the first one's place
+    ("09c-settings-theme", ["Escape"] + ["Down"] * 7 + ["Return", "Right", "sleep:0.8"]),  # Wallpaper: Deep blue
     ("09d-settings-themed", ["Escape", "sleep:0.6"]),                                # back on the first page, themed
-    ("09e-settings-sound", ["Up", "Up", "Up", "Return", "sleep:0.8"]),               # Sound: volume, mute, output
+    ("09e-settings-sound", ["Up", "Up", "Up", "Up", "Return", "sleep:0.8"]),               # Sound: volume, mute, output
     ("09f-settings-storage", ["Escape", "sleep:0.5", "Up", "Up", "Return", "sleep:0.8"]),  # Storage: the places and their room
+    ("09g-settings-notifications", ["Escape", "sleep:0.5", "Down", "Down", "Down", "Return", "sleep:0.8"]),
     ("10-settings-bottom", ["Escape", "sleep:0.6"] + ["Down"] * 12 + ["sleep:0.8"]), # Quit, at the end
     ("11-toasts", ["Escape", "sleep:0.5", "Home", "Down", "Right", "Right", "Right", "Return", "sleep:0.4",
                    "Up", "Right", "Right", "Down", "Return", "sleep:0.8"]),
     ("12-power", ["Escape", "Escape", "F1", "sleep:0.7", "Down", "Right", "Right", "Right", "Return", "sleep:0.6"]),  # Control Center → Power
+    ("12b-notifications", ["Escape", "sleep:0.5", "F1", "sleep:0.7", "Right", "Return", "sleep:0.9"]),  # Control Center → the list
     # The in-game overlay, over a stand-in game: Play, then the overlay as a keyboard shortcut opens
     # it, then a screenshot (the panel goes, a notification shows over the game).
     ("13-to-play", ["run:touch $HOME/.play", "Escape", "sleep:0.4", "Escape", "sleep:0.4", "Up", "Up", "Left", "Return", "sleep:0.6",

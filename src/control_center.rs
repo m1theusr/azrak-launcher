@@ -21,6 +21,7 @@ impl App {
             items.extend(["resume", "stop"]);
         }
         items.push("downloads");
+        items.push("notifications");
         let top = items.len();
         items.extend(["library", "settings", "controls", "power"]);
         (items, top)
@@ -64,6 +65,7 @@ impl App {
                         "resume" => app.resume_game(None),
                         "stop" => app.stop_game(None),
                         "downloads" => { let key = app.ring_key.clone(); app.open_downloads(key.as_deref()) }
+                        "notifications" => app.open_notifications(None),
                         "library" => app.switch_view(1, true),
                         "settings" => app.open_settings(),
                         "controls" => app.open_controls(),

@@ -308,6 +308,15 @@ pub fn fmt_duration_words(secs: f64) -> String {
     }
 }
 
+/// The local time of day at Unix time `t`, as the clock shows it ("8:00 AM").
+pub fn fmt_clock_at(t: f64) -> String {
+    let tt = t as libc::time_t;
+    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+    unsafe { libc::localtime_r(&tt, &mut tm) };
+    let h = tm.tm_hour;
+    format!("{}:{:02} {}", if h % 12 == 0 { 12 } else { h % 12 }, tm.tm_min, if h < 12 { "AM" } else { "PM" })
+}
+
 pub fn fmt_clock(secs: f64) -> String {
     let s = secs.max(0.0) as u64;
     let (h, m, x) = (s / 3600, s / 60 % 60, s % 60);

@@ -386,9 +386,12 @@ impl App {
             changed |= old != Some(job.state);
             if old.is_some_and(|o| o.active()) && old != Some(job.state) {
                 match job.state {
-                    State::Complete if job.install_to.is_some() => self.toast("Downloaded", &format!("{} · installing now", job.name), "download", crate::toast::INFO),
-                    State::Complete => self.toast("Downloaded", &format!("{} · ready to install", job.name), "download", crate::toast::INFO),
-                    State::Failed => self.toast("Download stopped", &job.name, "alert", crate::toast::FAILED),
+                    State::Complete if job.install_to.is_some() => self.notify(crate::toast::Cat::Downloads, crate::toast::INFO, "download", "Downloaded", &format!("{} · installing now", job.name),
+                        crate::toast::Action::Downloads(job.key.clone()), &format!("dl:{}", job.key), false),
+                    State::Complete => self.notify(crate::toast::Cat::Downloads, crate::toast::INFO, "download", "Downloaded", &format!("{} · ready to install", job.name),
+                        crate::toast::Action::Downloads(job.key.clone()), &format!("dl:{}", job.key), false),
+                    State::Failed => self.notify(crate::toast::Cat::Downloads, crate::toast::FAILED, "alert", "Download stopped", &job.name,
+                        crate::toast::Action::Downloads(job.key.clone()), &format!("dl:{}", job.key), true),
                     _ => {}
                 }
             }

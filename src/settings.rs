@@ -45,11 +45,18 @@ pub enum SId {
     AutoUpdate,
     KytyRollback,
     ShadRollback,
+    // Notifications (src/toast.rs)
+    NotifPopups,
+    NotifSecs,
+    NotifSound,
+    NotifGames,
+    NotifDesktop,
+    NotifDnd,
+    NotifCat(u8),
     // Controllers in Windows games (src/wine_pads.rs)
     WineSdlPads,
     // In-game overlay (src/overlay_ui.rs)
     OverlayHelper,
-    OverlayToasts,
     OverlayPause,
     // Storage (src/storage.rs)
     StoragePlace(u16),
@@ -138,6 +145,9 @@ impl App {
 
         header(&mut rows, "SOUND");
         rows.extend(self.sound_rows(cfg.sounds));
+
+        header(&mut rows, "NOTIFICATIONS");
+        rows.extend(self.notify_rows(&cfg));
 
         header(&mut rows, "DOWNLOADS");
         // VPN: the toggle keeps downloads off every other connection; the row below manages the
@@ -430,6 +440,7 @@ impl App {
                 Some(p) if p.total > 0 => (format!("{:.0} GB free", p.free as f64 / (1u64 << 30) as f64), if p.free < 50 << 30 { 2 } else { 0 }),
                 _ => (String::new(), 0),
             }),
+            "NOTIFICATIONS" => ("What lets you know, and when", if cfg_dnd(self) { ("Do not disturb".to_string(), 2) } else { (String::new(), 0) }),
             "SOUND" => ("Volume and where sound goes", if self.sound.muted { ("Muted".to_string(), 2) } else { (self.sound.volume.map(|v| format!("{v}%")).unwrap_or_default(), 0) }),
             "LAUNCHER" => ("Display and your game ratings", (String::new(), 0)),
             "ADVANCED" => ("KytyPS5 location and video options, the game catalog", (String::new(), 0)),
@@ -438,7 +449,7 @@ impl App {
         let sub = if header == "ABOUT" { format!("SwarmPlay {}", crate::update::current_version()) } else { sub.to_string() };
         // Its icon on the first page (ui/theme.slint Icons.get).
         let icon = match header {
-            "SYSTEM" => "wifi", "GAMES" => "grid", "PLAYING" => "gamepad", "STORAGE" => "disk", "SOUND" => "sound", "DOWNLOADS" => "download",
+            "SYSTEM" => "wifi", "GAMES" => "grid", "PLAYING" => "gamepad", "STORAGE" => "disk", "SOUND" => "sound", "NOTIFICATIONS" => "bell", "DOWNLOADS" => "download",
             "UPDATES" => "retry", "THEME" => "palette", "LAUNCHER" => "gear", "ADVANCED" => "log", _ => "info",
         };
         SettingSection { label: label.into(), sub: sub.into(), note: note.into(), note_kind, icon: icon.into() }
@@ -677,6 +688,10 @@ impl App {
         if self.sound_change(id, dir) {
             return;
         }
+        if self.notify_change(id, dir) {
+            audio::play(Sound::Move);
+            return self.refresh_settings();
+        }
         if self.theme_change(id, dir) {
             audio::play(Sound::Move);
             return self.refresh_settings();
@@ -724,11 +739,10 @@ impl App {
                 self.save_cfg(|c| c.seed_after_download = on);
                 self.push_downloads();
             }
-            SId::Fullscreen | SId::Amd | SId::ReturnOnExit | SId::Sounds | SId::AutoUpdate | SId::OverlayToasts | SId::OverlayPause | SId::WineSdlPads => {
+            SId::Fullscreen | SId::Amd | SId::ReturnOnExit | SId::Sounds | SId::AutoUpdate | SId::OverlayPause | SId::WineSdlPads => {
                 let on = dir > 0;
                 self.save_cfg(|c| match id {
                     SId::WineSdlPads => c.wine_sdl_pads = on,
-                    SId::OverlayToasts => c.overlay_toasts = on,
                     SId::OverlayPause => c.overlay_pause = on,
                     SId::Fullscreen => c.fullscreen = on,
                     SId::Amd => c.amd_cpu = on,
@@ -759,6 +773,11 @@ impl App {
         }
         match id {
             SId::StoragePlace(n) => self.storage_use(n as usize),
+            SId::NotifPopups | SId::NotifSound | SId::NotifDesktop | SId::NotifCat(_) => {
+                let on = self.settings_rows[i].on;
+                self.settings_change(i, if on { -1 } else { 1 });
+            }
+            SId::NotifSecs | SId::NotifGames | SId::NotifDnd => self.settings_change(i, 1),
             SId::OverlayHelper => self.overlay_helper_pressed(),
             SId::Emulator | SId::Dirs | SId::Extra | SId::DownloadDir | SId::InstallDir | SId::ThemeImage | SId::StorageAdd => {
                 let cfg = self.cfg.lock().unwrap().clone();
@@ -781,7 +800,7 @@ impl App {
                 ui.set_edit_index(i as i32);
             }
             SId::Fullscreen | SId::Amd | SId::ReturnOnExit | SId::Sounds | SId::AutoUpdate | SId::SeedCompleted | SId::VpnOnly | SId::SoundMute
-                | SId::OverlayToasts | SId::OverlayPause | SId::WineSdlPads => {
+                | SId::OverlayPause | SId::WineSdlPads => {
                 let on = self.settings_rows[i].on;
                 self.settings_change(i, if on { -1 } else { 1 });
             }
@@ -1048,3 +1067,88 @@ fn note_row(noted: SId, noted_label: &str, id: SId, label: &str) -> bool {
         _ => noted == id,
     }
 }
+
+/// Do not disturb is on now.
+fn cfg_dnd(app: &App) -> bool {
+    app.cfg.lock().unwrap().notify_dnd_until > crate::util::now_secs()
+}
+
+impl App {
+    /// Settings → Notifications.
+    fn notify_rows(&self, cfg: &crate::config::Config) -> Vec<(SId, SettingData)> {
+        use crate::toast::{CATS, DND, DURATIONS};
+        let mut rows = Vec::new();
+        let mut r = row(2, "Pop-up notifications");
+        r.on = cfg.notify_popups;
+        r.hint = "Small cards at the top right · everything is kept in the list (Control Center)".into();
+        rows.push((SId::NotifPopups, r));
+        let mut r = row(3, "Show them for");
+        r.value = format!("{} seconds", cfg.notify_secs).into();
+        let _ = DURATIONS;
+        rows.push((SId::NotifSecs, r));
+        let mut r = row(2, "Sound");
+        r.on = cfg.notify_sound;
+        rows.push((SId::NotifSound, r));
+        let mut r = row(3, "During games");
+        r.value = cfg.notify_games.clone().into();
+        r.hint = "Important ones: failures, a game ready to play, a low battery".into();
+        rows.push((SId::NotifGames, r));
+        let mut r = row(2, "When SwarmPlay is in the background");
+        r.on = cfg.notify_desktop;
+        r.hint = "As your desktop's notifications, with Open to go there".into();
+        rows.push((SId::NotifDesktop, r));
+        let mut r = row(3, "Do not disturb");
+        let now = crate::util::now_secs();
+        r.value = if cfg.notify_dnd_until <= now { DND[0].into() }
+            else if cfg.notify_dnd_until >= f64::MAX / 2.0 { DND[3].into() }
+            else { format!("Until {}", crate::util::fmt_clock_at(cfg.notify_dnd_until)).into() };
+        r.hint = "Nothing pops up but the important ones; the list keeps everything".into();
+        rows.push((SId::NotifDnd, r));
+        for (i, (_, name)) in CATS.iter().enumerate() {
+            let mut r = row(2, name);
+            r.on = !cfg.notify_off.iter().any(|o| o == name);
+            rows.push((SId::NotifCat(i as u8), r));
+        }
+        rows
+    }
+
+    /// Left/right (or a press) on a Notifications row. False: not one.
+    fn notify_change(&mut self, id: SId, dir: i32) -> bool {
+        use crate::toast::{CATS, DND, DURATIONS, DURING_GAMES};
+        let on = dir > 0;
+        let step = |list: &[&str], cur: &str| -> String {
+            let p = list.iter().position(|x| *x == cur).unwrap_or(0) as i32;
+            list[(p + dir).rem_euclid(list.len() as i32) as usize].to_string()
+        };
+        match id {
+            SId::NotifPopups => self.save_cfg(|c| c.notify_popups = on),
+            SId::NotifSound => self.save_cfg(|c| c.notify_sound = on),
+            SId::NotifDesktop => self.save_cfg(|c| c.notify_desktop = on),
+            SId::NotifSecs => self.save_cfg(|c| {
+                let p = DURATIONS.iter().position(|d| *d == c.notify_secs).unwrap_or(1) as i32;
+                c.notify_secs = DURATIONS[(p + dir).rem_euclid(DURATIONS.len() as i32) as usize];
+            }),
+            SId::NotifGames => { let cur = self.cfg.lock().unwrap().notify_games.clone(); let next = step(&DURING_GAMES, &cur); self.save_cfg(|c| c.notify_games = next); }
+            SId::NotifDnd => {
+                let now = crate::util::now_secs();
+                let cur = { let u = self.cfg.lock().unwrap().notify_dnd_until; if u <= now { 0 } else if u >= f64::MAX / 2.0 { 3 } else if u - now <= 3600.0 { 1 } else { 2 } };
+                let next = (cur + dir).rem_euclid(DND.len() as i32);
+                let until = match next {
+                    0 => 0.0,
+                    1 => now + 3600.0,
+                    // Until tomorrow, 8:00 local.
+                    2 => { let tm = crate::util::local_time(); let since_midnight = (tm.tm_hour * 3600 + tm.tm_min * 60 + tm.tm_sec) as f64; now - since_midnight + 86400.0 + 8.0 * 3600.0 }
+                    _ => f64::MAX,
+                };
+                self.save_cfg(|c| c.notify_dnd_until = until);
+            }
+            SId::NotifCat(i) => {
+                let name = CATS[i as usize].1.to_string();
+                self.save_cfg(|c| { c.notify_off.retain(|o| *o != name); if !on { c.notify_off.push(name); } });
+            }
+            _ => return false,
+        }
+        true
+    }
+}
+

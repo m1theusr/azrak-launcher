@@ -200,6 +200,8 @@ impl App {
                 app.set_status("", false);
                 match res {
                     Ok(()) => {
+                        app.notify(crate::toast::Cat::Updates, crate::toast::DONE, "check", "KytyPS5 updated", &crate::kyty::pretty(&rel.tag),
+                            crate::toast::Action::Settings("UPDATES".into()), "kyty-update", false);
                         {
                             let mut c = app.cfg.lock().unwrap();
                             c.emulator = kyty::managed_emulator().to_string_lossy().into_owned();

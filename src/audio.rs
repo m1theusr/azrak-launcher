@@ -14,6 +14,8 @@ pub enum Sound {
     Back,
     Error,
     Start,
+    /// A notification showing: two soft notes.
+    Notify,
 }
 
 static TX: OnceLock<Sender<Sound>> = OnceLock::new();
@@ -133,6 +135,10 @@ fn render(s: Sound) -> Vec<i16> {
         Sound::Select => tone(&mut buf, 680.0, 1020.0, 0.12, 0.09, Wave::Sine, 0.0),
         Sound::Back => tone(&mut buf, 880.0, 560.0, 0.1, 0.07, Wave::Sine, 0.0),
         Sound::Error => tone(&mut buf, 230.0, 170.0, 0.22, 0.06, Wave::Square, 0.0),
+        Sound::Notify => {
+            tone(&mut buf, 988.0, 988.0, 0.09, 0.05, Wave::Sine, 0.0);
+            tone(&mut buf, 1319.0, 1319.0, 0.14, 0.045, Wave::Sine, 0.08);
+        }
         Sound::Start => {
             tone(&mut buf, 392.0, 784.0, 0.45, 0.09, Wave::Sine, 0.0);
             tone(&mut buf, 587.0, 1175.0, 0.6, 0.06, Wave::Sine, 0.12);

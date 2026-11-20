@@ -222,7 +222,8 @@ impl App {
                             app.upd.told = rel.version.clone();
                             let auto = app.cfg.lock().unwrap().app_auto_update;
                             let sub = if auto { "Downloading it now" } else { "Settings → Updates to get it" };
-                            app.toast(&format!("SwarmPlay {} is out", rel.version), sub, "download", crate::toast::INFO);
+                            app.notify(crate::toast::Cat::Updates, crate::toast::INFO, "download", &format!("SwarmPlay {} is out", rel.version), sub,
+                                crate::toast::Action::Settings("UPDATES".into()), "app-update", false);
                         }
                         // Otherwise Settings says it: "Update to …" on the row and "1 ready"
                         // beside Updates, or "Up to date".
@@ -282,7 +283,8 @@ impl App {
                 match res {
                     Ok(()) => {
                         app.upd.installed = Some(rel.version.clone());
-                        app.toast(&format!("SwarmPlay {} is ready", rel.version), "Restart SwarmPlay to finish (Control Center → Power)", "check", crate::toast::DONE);
+                        app.notify(crate::toast::Cat::Updates, crate::toast::DONE, "check", &format!("SwarmPlay {} is ready", rel.version), "Restart SwarmPlay to finish",
+                            crate::toast::Action::Restart, "app-update", true);
                         crate::log!("launcher update {} installed", rel.version);
                     }
                     Err(e) => {
