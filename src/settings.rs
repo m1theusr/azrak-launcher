@@ -45,6 +45,10 @@ pub enum SId {
     AutoUpdate,
     KytyRollback,
     ShadRollback,
+    // In-game overlay (src/overlay_ui.rs)
+    OverlayHelper,
+    OverlayToasts,
+    OverlayPause,
     // Storage (src/storage.rs)
     StoragePlace(u16),
     StorageAdd,
@@ -124,6 +128,7 @@ impl App {
         r.hint = if connected { "Your controller works in games with no setup" } else { "Games play best with a controller · open to see the keyboard keys" }.into();
         rows.push((SId::Controls, r));
         rows.push((SId::ThisPc, self.this_pc_row()));
+        rows.extend(self.overlay_rows(&cfg));
 
         header(&mut rows, "SOUND");
         rows.extend(self.sound_rows(cfg.sounds));
@@ -713,9 +718,11 @@ impl App {
                 self.save_cfg(|c| c.seed_after_download = on);
                 self.push_downloads();
             }
-            SId::Fullscreen | SId::Amd | SId::ReturnOnExit | SId::Sounds | SId::AutoUpdate => {
+            SId::Fullscreen | SId::Amd | SId::ReturnOnExit | SId::Sounds | SId::AutoUpdate | SId::OverlayToasts | SId::OverlayPause => {
                 let on = dir > 0;
                 self.save_cfg(|c| match id {
+                    SId::OverlayToasts => c.overlay_toasts = on,
+                    SId::OverlayPause => c.overlay_pause = on,
                     SId::Fullscreen => c.fullscreen = on,
                     SId::Amd => c.amd_cpu = on,
                     SId::ReturnOnExit => c.return_on_exit = on,
@@ -745,6 +752,7 @@ impl App {
         }
         match id {
             SId::StoragePlace(n) => self.storage_use(n as usize),
+            SId::OverlayHelper => self.overlay_helper_pressed(),
             SId::Emulator | SId::Dirs | SId::Extra | SId::DownloadDir | SId::InstallDir | SId::ThemeImage | SId::StorageAdd => {
                 let cfg = self.cfg.lock().unwrap().clone();
                 let text = match id {
@@ -765,7 +773,8 @@ impl App {
                 ui.set_edit_text(text.into());
                 ui.set_edit_index(i as i32);
             }
-            SId::Fullscreen | SId::Amd | SId::ReturnOnExit | SId::Sounds | SId::AutoUpdate | SId::SeedCompleted | SId::VpnOnly | SId::SoundMute => {
+            SId::Fullscreen | SId::Amd | SId::ReturnOnExit | SId::Sounds | SId::AutoUpdate | SId::SeedCompleted | SId::VpnOnly | SId::SoundMute
+                | SId::OverlayToasts | SId::OverlayPause => {
                 let on = self.settings_rows[i].on;
                 self.settings_change(i, if on { -1 } else { 1 });
             }

@@ -105,7 +105,7 @@ impl App {
 
 /// Where focus goes among `len` items whose first `top` are the top row: across a row, and up
 /// and down between the rows. None: it stays.
-fn step(len: usize, top: usize, i: usize, a: Act) -> Option<usize> {
+pub(crate) fn step(len: usize, top: usize, i: usize, a: Act) -> Option<usize> {
     let upper = i < top;
     match a {
         Act::Left if i > 0 && (upper || i > top) => Some(i - 1),

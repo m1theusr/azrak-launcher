@@ -122,6 +122,13 @@ the window on the user's real desktop instead of Xvfb:
 distrobox enter azrak-dev -- env -u WAYLAND_DISPLAY python3 ~/Projects/azrak-launcher/scripts/ui_matrix.py 1920x1080
 ```
 
+The run is isolated from the real SwarmPlay: its own runtime folder (the `swarmplay --overlay` socket),
+pictures folder and desktop (`XDG_CURRENT_DESKTOP=XFCE`, no session bus), and `SWARMPLAY_NO_PAD=1` so it never
+reads (or, with the overlay open, grabs) the real controller. The last steps play a stand-in game (a full-screen
+picture) and drive the in-game overlay with `swarmplay --overlay` / `--screenshot`. The launcher's log is copied to
+`dist/ui-matrix/<size>/launcher.log`; `UI_MATRIX_KEEP=1` keeps the run's folder (it holds a ~5 GB copy of the cache,
+in /tmp: delete it after).
+
 Never start the launcher for a test through `distrobox enter … bash -l…`: the login shell sets
 `WAYLAND_DISPLAY=wayland-0` again and the window opens on the user's real desktop. In a shell, run
 `unset WAYLAND_DISPLAY XDG_SESSION_TYPE` first. The window's class/app id is `swarmplay` (main.rs).

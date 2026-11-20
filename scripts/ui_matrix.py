@@ -56,6 +56,13 @@ STEPS = [
     ("11-toasts", ["Escape", "sleep:0.5", "Home", "Down", "Right", "Right", "Right", "Return", "sleep:0.4",
                    "Up", "Right", "Right", "Down", "Return", "sleep:0.8"]),
     ("12-power", ["Escape", "Escape", "F1", "sleep:0.7", "Down", "Right", "Right", "Right", "Return", "sleep:0.6"]),  # Control Center → Power
+    # The in-game overlay, over a stand-in game: Play, then the overlay as a keyboard shortcut opens
+    # it, then a screenshot (the panel goes, a notification shows over the game).
+    ("13-to-play", ["run:touch $HOME/.play", "Escape", "sleep:0.4", "Escape", "sleep:0.4", "Up", "Up", "Left", "Return", "sleep:0.6",
+                    "Down", "Home", "Right", "sleep:0.6", "Down", "sleep:0.4"]),
+    ("13a-in-game", ["Return", "sleep:0.6", "Down", "sleep:0.4", "Return", "sleep:5"]),   # Your games → the game → Play
+    ("13b-overlay", ["run:{bin} --overlay", "sleep:1.2"]),
+    ("13c-screenshot-notice", ["run:{bin} --screenshot", "sleep:1.6"]),
 ]
 
 
@@ -71,9 +78,13 @@ def shoot(size: str, n: int, out: Path, binary: Path, game: Path | None):
     (home / ".config/azrak").mkdir(parents=True)
     seed_cache(home)
     install_game(home / "Games", game)
-    # A stand-in emulator that exits at once: screenshots must never start a real game.
+    # A stand-in emulator: screenshots must never start a real game. It exits at once, unless the
+    # run asks for a game in front (the in-game overlay's shots): then a full-screen picture.
+    picture = work / "game.png"
+    run(["convert", "-size", f"{w}x{h}", "gradient:#6c4b2a-#0c0907", "-gravity", "center", "-pointsize", "140",
+         "-fill", "#ffffff30", "-annotate", "0", "STAND-IN GAME", str(picture)])
     fake = work / "kyty_emulator"
-    fake.write_text("#!/bin/sh\nexit 0\n")
+    fake.write_text(f"#!/bin/sh\n[ -e \"$HOME/.play\" ] && exec display -backdrop -background '#0c0907' -title 'Stand-in game' {picture}\nexit 0\n")
     fake.chmod(0o755)
     (home / ".config/azrak/config.json").write_text(json.dumps(
         {"game_dirs": ["~/Games"], "sounds": False, **NO_UPDATES, "emulator": str(fake), "seed_after_download": False}))
@@ -95,16 +106,24 @@ esac
 exit 0
 """)
     (stubs / "pactl").chmod(0o755)
+    # Its own runtime folder (the command socket: never the real SwarmPlay's), pictures folder and
+    # desktop (an X11 one: no GNOME helper, no session bus).
+    (work / "run").mkdir(mode=0o700)
     env = {**os.environ, "DISPLAY": disp, "HOME": str(home), "PATH": f"{stubs}:{os.environ['PATH']}",
-           "AZRAK_PRETEND_VERSION": "1.3.0", "SWARMPLAY_BOOT_HOLD_MS": "6000"}
-    for k in ("XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME"):
+           "AZRAK_PRETEND_VERSION": "1.3.0", "SWARMPLAY_BOOT_HOLD_MS": "6000",
+           "XDG_RUNTIME_DIR": str(work / "run"), "XDG_PICTURES_DIR": str(work / "pictures"), "XDG_CURRENT_DESKTOP": "XFCE",
+           "SWARMPLAY_NO_PAD": "1"}
+    for k in ("XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME", "DBUS_SESSION_BUS_ADDRESS"):
         env.pop(k, None)
     procs = [subprocess.Popen(["Xvfb", disp, "-screen", "0", f"{w}x{h}x24", "+extension", "GLX", "-noreset"],
                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)]
     time.sleep(1.5)
-    procs.append(subprocess.Popen(["xfwm4", "--compositor=off"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+    # The compositor on: the in-game overlay is a see-through window over the game.
+    procs.append(subprocess.Popen(["xfwm4", "--compositor=on"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
     time.sleep(1.5)
-    app = subprocess.Popen([str(binary)], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    # What it says goes to launcher.log in the run's folder (kept with UI_MATRIX_KEEP=1).
+    log = open(work / "launcher.log", "w")
+    app = subprocess.Popen([str(binary)], env=env, stdout=log, stderr=subprocess.STDOUT)
     procs.append(app)
     d = out / size
     d.mkdir(parents=True, exist_ok=True)
@@ -127,6 +146,11 @@ exit 0
                 if k.startswith("sleep:"):
                     time.sleep(float(k[6:]))
                     continue
+                # A command, as a desktop shortcut would run it ({bin}: this launcher).
+                if k.startswith("run:"):
+                    run(["sh", "-c", k[4:].replace("{bin}", str(binary))], env=env, cwd=work)
+                    time.sleep(0.25)
+                    continue
                 run(["xdotool", "windowfocus", win], env=env)
                 run(["xdotool", "key", "--window", win, k], env=env)
                 time.sleep(0.25)
@@ -139,13 +163,18 @@ exit 0
         for p in reversed(procs):
             p.terminate()
         time.sleep(0.5)
-        shutil.rmtree(work, ignore_errors=True)
+        # The launcher's log beside the shots (the run's folder holds a copy of the cache: big).
+        shutil.copy(work / "launcher.log", d / "launcher.log")
+        if os.environ.get("UI_MATRIX_KEEP"):
+            print("kept", work, flush=True)
+        else:
+            shutil.rmtree(work, ignore_errors=True)
 
 
 def main():
     sizes = sys.argv[1:] or SIZES
     # scripts/check.sh shoots the quick build; by itself, the release one.
-    binary = Path(os.environ.get("SWARMPLAY_BIN", ROOT / "target/release/swarmplay"))
+    binary = Path(os.environ.get("SWARMPLAY_BIN", ROOT / "target/release/swarmplay")).resolve()
     out = ROOT / "dist/ui-matrix"
     out.mkdir(parents=True, exist_ok=True)
     game = Path(os.environ["DEMO_GAME"]) if os.environ.get("DEMO_GAME") else None

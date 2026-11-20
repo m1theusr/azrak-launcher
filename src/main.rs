@@ -26,6 +26,9 @@ mod theme;
 mod toast;
 mod sound;
 mod storage;
+mod overlay;
+mod overlay_ui;
+mod ipc;
 mod pfs;
 mod rar;
 mod package;
@@ -67,6 +70,10 @@ OPTIONS:
     --monitor <NAME>    Display to use (e.g. DP-2); overrides Settings
     --sync              Reload the local RuTracker catalog on start
     --catalog <PATH>    Use an English RuTracker PS5 JSON snapshot
+    --overlay           Open the in-game overlay of the SwarmPlay that's running
+                        (bind it to a key in your desktop's keyboard settings)
+    --home              Bring the running SwarmPlay's Home to the front
+    --screenshot        Take a screenshot of the game, as Share does
     --version           Print the version
     -h, --help          Show this help
 ";
@@ -100,6 +107,11 @@ fn main() {
                 std::env::set_var("AZRAK_CATALOG_PATH", path);
             }
             "--sync" => force_sync = true,
+            "--overlay" | "--home" | "--screenshot" => {
+                if crate::ipc::send(&a[2..]) { return; }
+                eprintln!("SwarmPlay isn't running");
+                std::process::exit(1);
+            }
             "--version" | "-V" => {
                 println!("swarmplay {}", env!("CARGO_PKG_VERSION"));
                 return;
